@@ -6,6 +6,11 @@ set -e
 # macOS gunicorn fork safety fix
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
+# Colima Docker socket (macOS server — not Docker Desktop)
+if [ -z "$DOCKER_HOST" ] && [ -S "$HOME/.colima/default/docker.sock" ]; then
+    export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
 BACKUP_DIR="$SCRIPT_DIR/db_backups"
