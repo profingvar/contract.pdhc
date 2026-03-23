@@ -315,10 +315,10 @@ async function loadOrganisations() {
 async function loadPlanDefinitions() {
   if (state.planDefsLoaded) return state.planDefinitions;
   try {
-    const res = await fetch(PLAN_URL + "/PlanDefinition");
+    const res = await fetch(PLAN_URL + "/api/v1/plandefinitions");
     if (res.ok) {
-      const bundle = await res.json();
-      state.planDefinitions = (bundle.entry || []).map(e => e.resource);
+      const data = await res.json();
+      state.planDefinitions = data.items || data || [];
       state.planDefsLoaded = true;
     }
   } catch (e) { console.warn("Could not load PlanDefinitions:", e.message); }
@@ -627,7 +627,7 @@ async function bindEditor(guid) {
       pdContainer.innerHTML = '<div class="text-muted">No plan definitions available</div>';
     } else {
       pdContainer.innerHTML = pds.map(p => {
-        const id = p.id || p.fhir_id;
+        const id = p.fhir_id || p.id;
         const label = p.title || p.name || id;
         return `<label style="display:flex;align-items:center;gap:0.4rem;padding:0.2rem 0;cursor:pointer">
           <input type="checkbox" class="pd-check" value="${esc(id)}" data-display="${esc(label)}"> ${esc(label)}
