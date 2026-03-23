@@ -7,9 +7,17 @@ set -e
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
 # Colima Docker socket (macOS server — not Docker Desktop)
-if [ -z "$DOCKER_HOST" ] && [ -S "$HOME/.colima/default/docker.sock" ]; then
-    export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
-fi
+# Try multiple known socket locations
+for sock in \
+    "${DOCKER_HOST#unix://}" \
+    "$HOME/.colima/default/docker.sock" \
+    "/Users/$(whoami)/.colima/default/docker.sock" \
+    "/var/run/docker.sock"; do
+    if [ -S "$sock" ]; then
+        export DOCKER_HOST="unix://$sock"
+        break
+    fi
+done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
@@ -25,6 +33,8 @@ else
 fi
 
 echo "=== contract.pdhc startup ==="
+echo "  DOCKER_HOST=$DOCKER_HOST"
+echo "  docker-compose=$DC"
 
 # 1. Kill any processes on project ports
 echo "Checking ports 9020-9023..."
@@ -37,28 +47,27 @@ for port in 9020 9021 9022 9023; do
 done
 echo "  Ports cleared."
 
-# 2. Ensure Docker is running (Colima first, then Docker Desktop)
+# 2. Ensure Docker is running
 echo "Checking Docker..."
 if ! docker info >/dev/null 2>&1; then
-    echo "  Docker not running. Attempting to start..."
+    echo "  Docker not reachable. Attempting to start Colima..."
     if command -v colima >/dev/null 2>&1; then
-        echo "  Starting Colima..."
         colima start 2>/dev/null || true
         sleep 3
-    fi
-    if ! docker info >/dev/null 2>&1; then
-        echo "  Trying Docker Desktop..."
-        open -a Docker 2>/dev/null || true
-        echo "  Waiting for Docker Desktop to start..."
-        for i in $(seq 1 30); do
-            if docker info >/dev/null 2>&1; then
+        # Re-detect socket after Colima start
+        for sock in \
+            "$HOME/.colima/default/docker.sock" \
+            "/Users/$(whoami)/.colima/default/docker.sock"; do
+            if [ -S "$sock" ]; then
+                export DOCKER_HOST="unix://$sock"
                 break
             fi
-            sleep 2
         done
     fi
     if ! docker info >/dev/null 2>&1; then
         echo "ERROR: Docker is not running and could not be started."
+        echo "  DOCKER_HOST=$DOCKER_HOST"
+        echo "  Try: export DOCKER_HOST=unix://\$HOME/.colima/default/docker.sock"
         exit 1
     fi
 fi
