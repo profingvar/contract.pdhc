@@ -57,7 +57,7 @@ echo "  Ports cleared."
 
 # 2. Ensure Docker is running
 echo "Checking Docker..."
-if ! $DOCKER info >/dev/null 2>&1; then
+if ! $DOCKER ps >/dev/null 2>&1; then
     echo "  Docker not reachable. Attempting to start Colima..."
     if command -v colima >/dev/null 2>&1; then
         colima start 2>/dev/null || true
