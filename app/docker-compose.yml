@@ -29,6 +29,12 @@ services:
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-change-me}
       DB_WAIT_TIMEOUT_S: "30"
       CORS_ORIGINS: "*"
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      SSO_BASE_URL: ${SSO_BASE_URL:-https://sso.pdhc.se}
+      SSO_CLIENT_ID: ${SSO_CLIENT_ID:-}
+      SSO_CLIENT_SECRET: ${SSO_CLIENT_SECRET:-}
+      SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-https://contract.pdhc.se/api/v1/auth/callback}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://contract.pdhc.se}
     depends_on:
       db:
         condition: service_healthy

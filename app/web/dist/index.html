@@ -227,7 +227,8 @@ const STATUSES = [
 const state = {
   token: sessionStorage.getItem("token") || null,
   role: sessionStorage.getItem("role") || null,
-  username: sessionStorage.getItem("username") || null,
+  email: sessionStorage.getItem("email") || null,
+  userType: sessionStorage.getItem("userType") || null,
   route: location.hash.slice(1) || "/",
   contracts: [],
   users: [],
@@ -237,14 +238,51 @@ const state = {
   planDefsLoaded: false,
 };
 
-function saveAuth(token, role, username) {
-  state.token = token; state.role = role; state.username = username;
-  if (token) { sessionStorage.setItem("token", token); sessionStorage.setItem("role", role); sessionStorage.setItem("username", username); }
-  else { sessionStorage.removeItem("token"); sessionStorage.removeItem("role"); sessionStorage.removeItem("username"); }
+function saveAuth(token, role, email, userType) {
+  state.token = token; state.role = role; state.email = email; state.userType = userType;
+  if (token) {
+    sessionStorage.setItem("token", token); sessionStorage.setItem("role", role);
+    sessionStorage.setItem("email", email || ""); sessionStorage.setItem("userType", userType || "");
+  } else {
+    sessionStorage.removeItem("token"); sessionStorage.removeItem("role");
+    sessionStorage.removeItem("email"); sessionStorage.removeItem("userType");
+  }
 }
 function isAdmin() { return state.role === "admin"; }
 function isLoggedIn() { return !!state.token; }
 function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+// SSO callback: check URL for sso_token or sso_error
+(function handleSsoCallback() {
+  const params = new URLSearchParams(location.search);
+  const ssoToken = params.get("sso_token");
+  const ssoError = params.get("sso_error");
+  if (ssoToken) {
+    sessionStorage.setItem("token", ssoToken);
+    state.token = ssoToken;
+    // Clean URL
+    history.replaceState(null, "", location.pathname + "#/dashboard");
+    state.route = "/dashboard";
+    // Fetch user info
+    fetch(API + "/api/v1/auth/me", { headers: { Authorization: "Bearer " + ssoToken } })
+      .then(r => r.ok ? r.json() : null)
+      .then(blob => {
+        if (blob) {
+          saveAuth(ssoToken, blob.role || "reader", blob.email || "", blob.user_type || "");
+        } else {
+          saveAuth(ssoToken, "reader", "", "");
+        }
+        render();
+      })
+      .catch(() => { saveAuth(ssoToken, "reader", "", ""); render(); });
+    return;
+  }
+  if (ssoError) {
+    history.replaceState(null, "", location.pathname + "#/login");
+    state.route = "/login";
+    setTimeout(() => toast(decodeURIComponent(ssoError), "error"), 100);
+  }
+})();
 
 // ──────────────────────────────────────────
 // API
@@ -254,7 +292,7 @@ async function api(path, opts = {}) {
   if (state.token) headers.Authorization = "Bearer " + state.token;
   try {
     const res = await fetch(API + path, { ...opts, headers });
-    if (res.status === 401 && state.token) { saveAuth(null, null, null); navigate("/login"); toast("Session expired", "error"); return { ok: false, status: 401, json: null }; }
+    if (res.status === 401 && state.token) { saveAuth(null, null, null, null); navigate("/login"); toast("Session expired — please sign in again", "error"); return { ok: false, status: 401, json: null }; }
     const text = await res.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
@@ -382,10 +420,12 @@ function renderNav() {
   links += `<a href="#/contracts" class="${r.startsWith('/contracts') ? 'active' : ''}"><i data-lucide="file-text"></i> Contracts</a>`;
   links += `<a href="#/docs" class="${r === '/docs' ? 'active' : ''}"><i data-lucide="book-open"></i> Docs</a>`;
   links += `<a href="#/api" class="${r === '/api' ? 'active' : ''}"><i data-lucide="code"></i> API</a>`;
-  if (admin) links += `<span class="nav-separator"></span><a href="#/users" class="${r === '/users' ? 'active' : ''}"><i data-lucide="users"></i> Users</a>`;
+  // Users page only in local auth mode (AUTH_DISABLED)
+  if (admin && !state.userType) links += `<span class="nav-separator"></span><a href="#/users" class="${r === '/users' ? 'active' : ''}"><i data-lucide="users"></i> Users</a>`;
 
+  const displayName = state.email || state.userType || "user";
   const user = auth
-    ? `<div class="nav-user"><span>${esc(state.username)}</span><span class="role-tag">${state.role}</span><button onclick="logout()">Logout</button></div>`
+    ? `<div class="nav-user"><span>${esc(displayName)}</span><span class="role-tag">${state.role}</span><button onclick="logout()">Logout</button></div>`
     : `<div class="nav-user"><a href="#/login" style="color:rgba(255,255,255,0.9)">Login</a></div>`;
 
   return `<nav>
@@ -402,29 +442,15 @@ function renderNav() {
 function renderLogin() {
   return `<div class="login-wrap"><div class="card login-card">
     <h1>Contracts <span>PDHC</span></h1>
-    <div class="form-group"><label for="l-user">Username</label><input id="l-user" class="form-control" autocomplete="username"></div>
-    <div class="form-group"><label for="l-pass">Password</label><input id="l-pass" class="form-control" type="password" autocomplete="current-password"></div>
+    <p class="text-muted" style="text-align:center;margin-bottom:1rem">Sign in via PDHC SSO to manage contracts.</p>
     <div class="btn-group" style="flex-direction:column">
-      <button class="btn btn-primary" id="l-btn" style="width:100%;justify-content:center"><i data-lucide="log-in"></i> Login</button>
+      <a class="btn btn-primary" href="${API}/api/v1/auth/login" style="width:100%;justify-content:center;text-decoration:none"><i data-lucide="log-in"></i> Sign in with SSO</a>
       <button class="btn btn-secondary" onclick="navigate('/contracts')" style="width:100%;justify-content:center">Browse contracts (public)</button>
     </div>
   </div></div>`;
 }
-function bindLogin() {
-  const btn = document.getElementById("l-btn");
-  async function go() {
-    const u = document.getElementById("l-user").value, p = document.getElementById("l-pass").value;
-    if (!u || !p) { toast("Enter username and password", "error"); return; }
-    btn.disabled = true;
-    const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) });
-    btn.disabled = false;
-    if (r.ok) { saveAuth(r.json.access_token, r.json.role, u); toast("Logged in"); navigate("/dashboard"); }
-    else toast(r.json?.error || "Invalid credentials", "error");
-  }
-  btn.onclick = go;
-  document.getElementById("l-pass").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
-}
-function logout() { saveAuth(null, null, null); toast("Logged out"); navigate("/"); }
+function bindLogin() {}
+function logout() { saveAuth(null, null, null, null); toast("Logged out"); navigate("/"); }
 
 // ──────────────────────────────────────────
 // Public content
@@ -747,26 +773,26 @@ function renderDocs() {
 function renderApiRef() {
   const eps = [
     { m: "GET", p: "/health", a: "None", r: "—", d: "Health check" },
-    { m: "POST", p: "/auth/login", a: "None", r: "—", d: "Authenticate" },
+    { m: "GET", p: "/api/v1/auth/login", a: "None", r: "—", d: "SSO login redirect (H1)" },
+    { m: "GET", p: "/api/v1/auth/callback", a: "None", r: "—", d: "SSO callback (H3→H4)" },
+    { m: "GET", p: "/api/v1/auth/me", a: "JWT", r: "—", d: "Current user info" },
+    { m: "GET", p: "/api/v1/auth/logout", a: "None", r: "—", d: "Logout" },
     { m: "GET", p: "/fhir/metadata", a: "None", r: "100/hr", d: "CapabilityStatement" },
     { m: "GET", p: "/fhir/Contract", a: "None", r: "100/hr", d: "List contracts" },
     { m: "GET", p: "/fhir/Contract/{id}", a: "None", r: "100/hr", d: "Read contract" },
     { m: "POST", p: "/fhir/Contract", a: "Admin", r: "—", d: "Create contract" },
     { m: "PUT", p: "/fhir/Contract/{id}", a: "Admin", r: "—", d: "Update contract" },
     { m: "DELETE", p: "/fhir/Contract/{id}", a: "Admin", r: "—", d: "Delete contract" },
-    { m: "GET", p: "/admin/users", a: "Admin", r: "—", d: "List users" },
-    { m: "POST", p: "/admin/users", a: "Admin", r: "—", d: "Create user" },
-    { m: "PUT", p: "/admin/users/{id}", a: "Admin", r: "—", d: "Update user" },
-    { m: "POST", p: "/admin/users/{id}/reset-password", a: "Admin", r: "—", d: "Reset password" },
   ];
   const mc = { GET: "var(--success)", POST: "var(--primary)", PUT: "var(--warning)", DELETE: "var(--danger)" };
   return `<h1>API Reference</h1>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Rate</th><th>Description</th></tr></thead>
-      <tbody>${eps.map(e => `<tr><td><strong class="mono" style="color:${mc[e.m]}">${e.m}</strong></td><td class="mono">${esc(e.p)}</td><td><span class="badge ${e.a === 'Admin' ? 'badge-warning' : 'badge-success'}">${e.a}</span></td><td>${e.r}</td><td>${e.d}</td></tr>`).join("")}</tbody>
+      <tbody>${eps.map(e => `<tr><td><strong class="mono" style="color:${mc[e.m]}">${e.m}</strong></td><td class="mono">${esc(e.p)}</td><td><span class="badge ${e.a === 'Admin' ? 'badge-warning' : e.a === 'JWT' ? 'badge-info' : 'badge-success'}">${e.a}</span></td><td>${e.r}</td><td>${e.d}</td></tr>`).join("")}</tbody>
     </table></div></div>
     <div class="card" style="margin-top:0.75rem"><h2>Authentication</h2>
-      <p class="text-muted">POST <code>/auth/login</code> with <code>{"username","password"}</code> → returns <code>{"access_token","role"}</code>. Include as <code>Authorization: Bearer &lt;token&gt;</code>. Tokens expire after 8 hours.</p>
+      <p class="text-muted">Authentication is via PDHC SSO (sso.pdhc.se). Visit <code>/api/v1/auth/login</code> to start the SSO handshake. After authentication, a local JWT is issued. Include as <code>Authorization: Bearer &lt;token&gt;</code>. Tokens expire after 8 hours.</p>
+      <p class="text-muted" style="margin-top:0.5rem"><strong>Roles:</strong> <code>admin</code> (SU admin or professional) — full CRUD. <code>reader</code> (patient or other) — read-only. Public FHIR read endpoints require no auth.</p>
     </div>`;
 }
 

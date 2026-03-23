@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import os
+import secrets
 import time
 from datetime import timedelta
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request, session
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token, get_jwt, get_jwt_identity, jwt_required
+from flask_jwt_extended import JWTManager, create_access_token, get_jwt, jwt_required
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from sqlalchemy import select
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
 from .config import Config
@@ -18,6 +18,7 @@ from .db import make_engine, make_session_factory
 from .fhir import build_capability_statement, ensure_contract_shape
 from .models import Base, ContractRecord, User
 from .security import hash_password, verify_password
+from .sso import get_sso_login_url, validate_token
 
 
 def create_app() -> Flask:
@@ -55,6 +56,19 @@ def create_app() -> Flask:
     def db_session():
         return SessionLocal()
 
+    # ── Role mapping ──────────────────────────────────────────────
+    # SSO access blob → local role:
+    #   is_su_admin=True           → admin
+    #   professional user          → admin  (can CRUD contracts)
+    #   any other authenticated    → reader
+
+    def _role_from_blob(blob: dict) -> str:
+        if blob.get("is_su_admin"):
+            return "admin"
+        if blob.get("user_type") == "professional":
+            return "admin"
+        return "reader"
+
     def require_role(*roles: str):
         def decorator(fn):
             @jwt_required()
@@ -71,6 +85,8 @@ def create_app() -> Flask:
         return decorator
 
     def seed_admin_if_needed():
+        if not app.config.get("AUTH_DISABLED"):
+            return
         username = os.getenv("BOOTSTRAP_ADMIN_USERNAME")
         password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD")
         if not username or not password:
@@ -91,12 +107,99 @@ def create_app() -> Flask:
 
     seed_admin_if_needed()
 
+    # ── Health ────────────────────────────────────────────────────
+
     @app.get("/health")
     def health():
         return jsonify({"status": "ok"})
 
+    # ── SSO Auth (H1–H4) ─────────────────────────────────────────
+
+    @app.get("/api/v1/auth/login")
+    def sso_login():
+        """H1 — redirect to SSO for authentication."""
+        if app.config.get("AUTH_DISABLED"):
+            return jsonify({"message": "Auth disabled — use /auth/login for local auth"}), 200
+        state = secrets.token_urlsafe(32)
+        session["sso_state"] = state
+        return redirect(get_sso_login_url(state))
+
+    @app.get("/api/v1/auth/callback")
+    def sso_callback():
+        """H3→H4 — receive JWT from SSO redirect, validate, issue local JWT."""
+        if app.config.get("AUTH_DISABLED"):
+            return jsonify({"error": "Auth disabled"}), 400
+
+        # Check for SSO error response
+        error = request.args.get("error")
+        if error:
+            desc = request.args.get("error_description", "Authentication failed")
+            return redirect(f"/?sso_error={desc}")
+
+        # CSRF state validation
+        state = request.args.get("state", "")
+        expected_state = session.pop("sso_state", None)
+        if not state or state != expected_state:
+            return redirect("/?sso_error=CSRF+state+mismatch")
+
+        token = request.args.get("token", "")
+        if not token:
+            return redirect("/?sso_error=No+token+received")
+
+        # H4 — validate token with SSO
+        blob = validate_token(token)
+        if blob is None:
+            return redirect("/?sso_error=Token+validation+failed")
+
+        # Map SSO access blob to local JWT claims
+        role = _role_from_blob(blob)
+        local_token = create_access_token(
+            identity=blob.get("user_guid", "sso-user"),
+            additional_claims={
+                "role": role,
+                "email": blob.get("email", ""),
+                "user_type": blob.get("user_type", ""),
+                "user_guid": blob.get("user_guid", ""),
+                "is_su_admin": blob.get("is_su_admin", False),
+                "effective_phases": blob.get("effective_phases", []),
+                "organization_ids": blob.get("organization_ids", []),
+                "sso": True,
+            },
+            expires_delta=timedelta(hours=8),
+        )
+
+        # Redirect to SPA with the JWT in query param
+        base_url = os.getenv("PUBLIC_WEB_URL", "")
+        return redirect(f"{base_url}/?sso_token={local_token}")
+
+    @app.get("/api/v1/auth/logout")
+    def sso_logout():
+        """Clear session."""
+        session.pop("sso_state", None)
+        return redirect("/")
+
+    @app.get("/api/v1/auth/me")
+    @jwt_required()
+    def sso_me():
+        """Return current user claims from JWT."""
+        claims = get_jwt()
+        return jsonify({
+            "user_guid": claims.get("user_guid", claims.get("sub", "")),
+            "email": claims.get("email", claims.get("username", "")),
+            "role": claims.get("role", "reader"),
+            "user_type": claims.get("user_type", ""),
+            "is_su_admin": claims.get("is_su_admin", False),
+            "effective_phases": claims.get("effective_phases", []),
+            "organization_ids": claims.get("organization_ids", []),
+            "sso": claims.get("sso", False),
+        })
+
+    # ── Local auth (fallback for AUTH_DISABLED mode) ──────────────
+
     @app.post("/auth/login")
     def login():
+        if not app.config.get("AUTH_DISABLED"):
+            return jsonify({"error": "Local auth disabled — use SSO", "sso_login_url": "/api/v1/auth/login"}), 400
         data = request.get_json(force=True, silent=True) or {}
         username = data.get("username", "")
         password = data.get("password", "")
@@ -111,6 +214,8 @@ def create_app() -> Flask:
                 expires_delta=timedelta(hours=8),
             )
             return jsonify({"access_token": token, "role": user.role})
+
+    # ── FHIR endpoints ────────────────────────────────────────────
 
     @app.get("/fhir/metadata")
     @limiter.limit(app.config["READ_RATE_LIMIT"])
@@ -185,6 +290,8 @@ def create_app() -> Flask:
             s.commit()
         return "", 204
 
+    # ── Admin: Users (only available in AUTH_DISABLED mode) ───────
+
     @app.get("/admin/users")
     @require_role("admin")
     def list_users():
@@ -258,4 +365,3 @@ def create_app() -> Flask:
 
 
 app = create_app()
-
