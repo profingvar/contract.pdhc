@@ -18,15 +18,12 @@ for sock in \
     fi
 done
 
-# Wrap docker to always pass -H flag (Docker v29 ignores DOCKER_HOST)
-docker() {
-    if [ -n "$DOCKER_SOCK" ]; then
-        command docker -H "unix://$DOCKER_SOCK" "$@"
-    else
-        command docker "$@"
-    fi
-}
-export -f docker 2>/dev/null || true
+# Docker CLI v29 ignores DOCKER_HOST — must pass -H explicitly
+if [ -n "$DOCKER_SOCK" ]; then
+    DOCKER="docker -H unix://$DOCKER_SOCK"
+else
+    DOCKER="docker"
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
@@ -60,7 +57,7 @@ echo "  Ports cleared."
 
 # 2. Ensure Docker is running
 echo "Checking Docker..."
-if ! docker info >/dev/null 2>&1; then
+if ! $DOCKER info >/dev/null 2>&1; then
     echo "  Docker not reachable. Attempting to start Colima..."
     if command -v colima >/dev/null 2>&1; then
         colima start 2>/dev/null || true
@@ -71,12 +68,13 @@ if ! docker info >/dev/null 2>&1; then
             "/Users/$(whoami)/.colima/default/docker.sock"; do
             if [ -S "$sock" ]; then
                 DOCKER_SOCK="$sock"
+                DOCKER="docker -H unix://$sock"
                 export DOCKER_HOST="unix://$sock"
                 break
             fi
         done
     fi
-    if ! docker info >/dev/null 2>&1; then
+    if ! $DOCKER info >/dev/null 2>&1; then
         echo "ERROR: Docker is not running and could not be started."
         echo "  Socket: $DOCKER_SOCK"
         exit 1
@@ -87,10 +85,10 @@ echo "  Docker is running."
 # 3. Back up database if container is running (before any restart)
 mkdir -p "$BACKUP_DIR"
 DB_CONTAINER=$(cd "$APP_DIR" && $DC ps -q db 2>/dev/null || true)
-if [ -n "$DB_CONTAINER" ] && docker ps -q --filter "id=$DB_CONTAINER" 2>/dev/null | grep -q .; then
+if [ -n "$DB_CONTAINER" ] && $DOCKER ps -q --filter "id=$DB_CONTAINER" 2>/dev/null | grep -q .; then
     echo "Backing up database..."
     TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
-    docker exec "$DB_CONTAINER" pg_dumpall -U contracts 2>/dev/null | gzip > "$BACKUP_DIR/contracts_${TIMESTAMP}.sql.gz" || echo "  Warning: backup failed (non-fatal)"
+    $DOCKER exec "$DB_CONTAINER" pg_dumpall -U contracts 2>/dev/null | gzip > "$BACKUP_DIR/contracts_${TIMESTAMP}.sql.gz" || echo "  Warning: backup failed (non-fatal)"
     ls -t "$BACKUP_DIR"/contracts_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
     echo "  Backup saved to db_backups/contracts_${TIMESTAMP}.sql.gz"
 fi
