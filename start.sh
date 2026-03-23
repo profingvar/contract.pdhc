@@ -6,31 +6,35 @@ set -e
 # macOS gunicorn fork safety fix
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
-# Colima Docker socket (macOS server — not Docker Desktop)
-# Docker CLI v29+ ignores DOCKER_HOST in favour of contexts.
-# Detect the Colima socket and create/use a docker context for it.
+# Detect Colima Docker socket (Docker CLI v29 ignores DOCKER_HOST env var)
+DOCKER_SOCK=""
 for sock in \
     "$HOME/.colima/default/docker.sock" \
     "/Users/$(whoami)/.colima/default/docker.sock" \
     "/var/run/docker.sock"; do
     if [ -S "$sock" ]; then
-        export DOCKER_HOST="unix://$sock"
-        # Ensure a docker context exists pointing to this socket
-        if docker context inspect colima >/dev/null 2>&1; then
-            docker context use colima >/dev/null 2>&1 || true
-        else
-            docker context create colima --docker "host=unix://$sock" >/dev/null 2>&1 || true
-            docker context use colima >/dev/null 2>&1 || true
-        fi
+        DOCKER_SOCK="$sock"
         break
     fi
 done
+
+# Wrap docker to always pass -H flag (Docker v29 ignores DOCKER_HOST)
+docker() {
+    if [ -n "$DOCKER_SOCK" ]; then
+        command docker -H "unix://$DOCKER_SOCK" "$@"
+    else
+        command docker "$@"
+    fi
+}
+export -f docker 2>/dev/null || true
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
 BACKUP_DIR="$SCRIPT_DIR/db_backups"
 
 # Detect docker-compose binary (server uses hyphenated standalone)
+# docker-compose reads DOCKER_HOST, so export it too
+export DOCKER_HOST="${DOCKER_SOCK:+unix://$DOCKER_SOCK}"
 if [ -x /opt/homebrew/bin/docker-compose ]; then
     DC="/opt/homebrew/bin/docker-compose"
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -40,8 +44,8 @@ else
 fi
 
 echo "=== contract.pdhc startup ==="
-echo "  DOCKER_HOST=$DOCKER_HOST"
-echo "  docker-compose=$DC"
+echo "  Socket: ${DOCKER_SOCK:-system default}"
+echo "  Compose: $DC"
 
 # 1. Kill any processes on project ports
 echo "Checking ports 9020-9023..."
@@ -66,6 +70,7 @@ if ! docker info >/dev/null 2>&1; then
             "$HOME/.colima/default/docker.sock" \
             "/Users/$(whoami)/.colima/default/docker.sock"; do
             if [ -S "$sock" ]; then
+                DOCKER_SOCK="$sock"
                 export DOCKER_HOST="unix://$sock"
                 break
             fi
@@ -73,8 +78,7 @@ if ! docker info >/dev/null 2>&1; then
     fi
     if ! docker info >/dev/null 2>&1; then
         echo "ERROR: Docker is not running and could not be started."
-        echo "  DOCKER_HOST=$DOCKER_HOST"
-        echo "  Try: export DOCKER_HOST=unix://\$HOME/.colima/default/docker.sock"
+        echo "  Socket: $DOCKER_SOCK"
         exit 1
     fi
 fi
@@ -87,7 +91,6 @@ if [ -n "$DB_CONTAINER" ] && docker ps -q --filter "id=$DB_CONTAINER" 2>/dev/nul
     echo "Backing up database..."
     TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
     docker exec "$DB_CONTAINER" pg_dumpall -U contracts 2>/dev/null | gzip > "$BACKUP_DIR/contracts_${TIMESTAMP}.sql.gz" || echo "  Warning: backup failed (non-fatal)"
-    # Rotate: keep last 10 backups
     ls -t "$BACKUP_DIR"/contracts_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
     echo "  Backup saved to db_backups/contracts_${TIMESTAMP}.sql.gz"
 fi
