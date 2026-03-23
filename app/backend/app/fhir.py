@@ -164,7 +164,7 @@ def ensure_contract_shape(resource: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError(f"period.{k} must be ISO-8601 datetime") from e
 
     # Optional string fields
-    for field in ("title", "name"):
+    for field in ("title", "name", "note"):
         if field in resource and not isinstance(resource[field], str):
             raise ValueError(f"{field} must be a string")
 

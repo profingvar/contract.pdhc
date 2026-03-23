@@ -363,9 +363,13 @@ function getParty(contract, roleCode) {
   return p.reference[0].display || p.reference[0].reference || "—";
 }
 
+function getTopics(contract) {
+  if (!contract.topic || !contract.topic.length) return [];
+  return contract.topic.map(t => t.display || t.reference || "—");
+}
 function getTopic(contract) {
-  if (!contract.topic || !contract.topic[0]) return null;
-  return contract.topic[0].display || contract.topic[0].reference || "—";
+  const t = getTopics(contract);
+  return t.length ? t.join(", ") : null;
 }
 
 function fmtDate(d) { return d ? d.slice(0, 10) : "—"; }
@@ -511,15 +515,17 @@ function renderTable(contracts) {
   if (!contracts.length) { el.innerHTML = '<div class="empty">No contracts found</div>'; return; }
   const admin = isAdmin();
   el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Title</th><th>Payer</th><th>Provider</th><th>Status</th><th>Period</th>${admin ? '<th class="text-right">Actions</th>' : ''}</tr></thead>
+    <thead><tr><th>Title</th><th>Requester</th><th>Provider</th><th>Services</th><th>Status</th><th>Period</th>${admin ? '<th class="text-right">Actions</th>' : ''}</tr></thead>
     <tbody>${contracts.map(c => {
       const title = c.title || c.name || (c.id ? c.id.slice(0, 8) + "..." : "—");
-      const payer = getParty(c, "payer") || "—";
+      const requester = getParty(c, "payer") || "—";
       const provider = getParty(c, "provider") || "—";
+      const topics = getTopics(c);
+      const servicesHtml = topics.length ? topics.length + " service" + (topics.length > 1 ? "s" : "") : "—";
       const period = fmtDate(c.period?.start) + " — " + fmtDate(c.period?.end);
       return `<tr class="clickable" onclick="navigate('/contracts/${c.id}')">
-        <td><strong>${esc(title)}</strong></td><td>${esc(payer)}</td><td>${esc(provider)}</td>
-        <td>${statusBadge(c.status)}</td><td style="white-space:nowrap">${period}</td>
+        <td><strong>${esc(title)}</strong></td><td>${esc(requester)}</td><td>${esc(provider)}</td>
+        <td>${servicesHtml}</td><td>${statusBadge(c.status)}</td><td style="white-space:nowrap">${period}</td>
         ${admin ? `<td class="text-right"><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();navigate('/contracts/edit/${c.id}')"><i data-lucide="pencil"></i></button> <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteContract('${c.id}')"><i data-lucide="trash-2"></i></button></td>` : ''}
       </tr>`;
     }).join("")}</tbody></table></div>`;
@@ -539,17 +545,19 @@ function renderDetail(guid) {
 }
 
 function renderDetailContent(c) {
-  const payer = getParty(c, "payer") || "—";
+  const requester = getParty(c, "payer") || "—";
   const provider = getParty(c, "provider") || "—";
-  const topic = getTopic(c) || "—";
+  const topics = getTopics(c);
+  const topicsHtml = topics.length ? topics.map(t => `<span class="badge badge-info" style="margin-right:0.3rem;margin-bottom:0.2rem">${esc(t)}</span>`).join("") : "—";
   return `<h2>${esc(c.title || c.name || "Contract")}</h2>
     <div class="detail-grid" style="margin-top:0.75rem">
       <div class="detail-label">Status</div><div class="detail-value">${statusBadge(c.status)}</div>
-      <div class="detail-label">Payer</div><div class="detail-value">${esc(payer)}</div>
+      <div class="detail-label">Requester</div><div class="detail-value">${esc(requester)}</div>
       <div class="detail-label">Provider</div><div class="detail-value">${esc(provider)}</div>
-      <div class="detail-label">Work Area</div><div class="detail-value">${esc(topic)}</div>
+      <div class="detail-label">Services</div><div class="detail-value">${topicsHtml}</div>
       <div class="detail-label">Period</div><div class="detail-value">${fmtDate(c.period?.start)} — ${fmtDate(c.period?.end)}</div>
       <div class="detail-label">Issued</div><div class="detail-value">${fmtDate(c.issued)}</div>
+      <div class="detail-label">Comments</div><div class="detail-value">${esc(c.note || "—")}</div>
       <div class="detail-label">ID</div><div class="detail-value"><code>${esc(c.id || "—")}</code></div>
     </div>
     <details style="margin-top:1rem"><summary style="cursor:pointer;font-weight:600;font-size:0.92em;color:var(--text-muted)">Raw FHIR JSON</summary>
@@ -572,20 +580,25 @@ function renderEditor(guid) {
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label for="ed-payer">Payer Organisation</label>
+      <div class="form-group"><label for="ed-payer">Requesting Organisation</label>
         <select id="ed-payer" class="form-control"><option value="">Loading organisations...</option></select>
       </div>
       <div class="form-group"><label for="ed-provider">Provider Organisation</label>
         <select id="ed-provider" class="form-control"><option value="">Loading organisations...</option></select>
       </div>
     </div>
-    <div class="form-group"><label for="ed-plandef">Work Area (PlanDefinition)</label>
-      <select id="ed-plandef" class="form-control"><option value="">Loading plan definitions...</option></select>
+    <div class="form-group"><label>Contracted Services (PlanDefinitions)</label>
+      <div id="ed-plandefs" style="border:1px solid var(--border);border-radius:5px;padding:0.5rem;max-height:200px;overflow-y:auto;background:var(--card-bg)">
+        <div class="text-muted">Loading plan definitions...</div>
+      </div>
     </div>
     <div class="form-row-3">
       <div class="form-group"><label for="ed-start">Period Start</label><input id="ed-start" class="form-control" type="date"></div>
       <div class="form-group"><label for="ed-end">Period End</label><input id="ed-end" class="form-control" type="date"></div>
       <div class="form-group"><label for="ed-issued">Issued</label><input id="ed-issued" class="form-control" type="date"></div>
+    </div>
+    <div class="form-group"><label for="ed-note">Comments</label>
+      <textarea id="ed-note" class="form-control" rows="3" placeholder="Additional notes or comments about this contract"></textarea>
     </div>
     <div class="btn-group">
       <button class="btn btn-primary" id="ed-save"><i data-lucide="save"></i> ${isEdit ? "Update" : "Create"}</button>
@@ -604,9 +617,24 @@ function populateSelect(id, items, valueFn, labelFn, placeholder) {
 async function bindEditor(guid) {
   // Load external data
   const [orgs, pds] = await Promise.all([loadOrganisations(), loadPlanDefinitions()]);
-  populateSelect("ed-payer", orgs, o => o.organisation_guid, o => o.name, "— Select Payer —");
-  populateSelect("ed-provider", orgs, o => o.organisation_guid, o => o.name, "— Select Provider —");
-  populateSelect("ed-plandef", pds, p => p.id || p.fhir_id, p => p.title || p.name || p.id, "— Select Work Area —");
+  populateSelect("ed-payer", orgs, o => o.organisation_guid, o => o.name, "— Select Requesting Org —");
+  populateSelect("ed-provider", orgs, o => o.organisation_guid, o => o.name, "— Select Provider Org —");
+
+  // Populate PlanDefinition checkboxes
+  const pdContainer = document.getElementById("ed-plandefs");
+  if (pdContainer) {
+    if (!pds.length) {
+      pdContainer.innerHTML = '<div class="text-muted">No plan definitions available</div>';
+    } else {
+      pdContainer.innerHTML = pds.map(p => {
+        const id = p.id || p.fhir_id;
+        const label = p.title || p.name || id;
+        return `<label style="display:flex;align-items:center;gap:0.4rem;padding:0.2rem 0;cursor:pointer">
+          <input type="checkbox" class="pd-check" value="${esc(id)}" data-display="${esc(label)}"> ${esc(label)}
+        </label>`;
+      }).join("");
+    }
+  }
 
   // If editing, load existing contract
   if (guid) {
@@ -620,15 +648,18 @@ async function bindEditor(guid) {
     if (c.period?.start) $("ed-start").value = c.period.start.slice(0, 10);
     if (c.period?.end) $("ed-end").value = c.period.end.slice(0, 10);
     if (c.issued) $("ed-issued").value = c.issued.slice(0, 10);
+    if (c.note) $("ed-note").value = c.note;
     // Set party pickers
     const payerRef = getPartyRef(c, "payer");
     const provRef = getPartyRef(c, "provider");
     if (payerRef) $("ed-payer").value = payerRef;
     if (provRef) $("ed-provider").value = provRef;
-    // Set topic picker
-    if (c.topic && c.topic[0] && c.topic[0].reference) {
-      const pdId = c.topic[0].reference.split("/").pop();
-      $("ed-plandef").value = pdId;
+    // Set topic checkboxes
+    if (c.topic && c.topic.length) {
+      const selectedIds = c.topic.map(t => t.reference ? t.reference.split("/").pop() : "");
+      document.querySelectorAll(".pd-check").forEach(cb => {
+        if (selectedIds.includes(cb.value)) cb.checked = true;
+      });
     }
   }
 
@@ -696,12 +727,18 @@ function buildContract() {
   }
   if (parties.length) contract.party = parties;
 
-  // Topic
-  const pdId = $("ed-plandef");
-  if (pdId) {
-    const pd = state.planDefinitions.find(p => (p.id || p.fhir_id) === pdId);
-    contract.topic = [{ reference: "PlanDefinition/" + pdId, display: pd ? (pd.title || pd.name || pdId) : "" }];
+  // Topics — multiple PlanDefinitions from checkboxes
+  const checkedPds = document.querySelectorAll(".pd-check:checked");
+  if (checkedPds.length) {
+    contract.topic = Array.from(checkedPds).map(cb => ({
+      reference: "PlanDefinition/" + cb.value,
+      display: cb.dataset.display || cb.value,
+    }));
   }
+
+  // Comments
+  const note = $("ed-note");
+  if (note) contract.note = note;
 
   return contract;
 }
