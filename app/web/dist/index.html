@@ -753,30 +753,30 @@
     ];
 
     function docCard(d) {
-      return \`
+      return `
         <div class="card" style="margin-bottom:var(--sp-base)">
           <div style="display:flex;align-items:center;gap:var(--sp-sm);margin-bottom:var(--sp-sm)">
-            <i data-lucide="\${d.icon}" style="width:1.25rem;height:1.25rem;color:var(--pdhc-teal)"></i>
-            <h3 style="font-size:1.1rem;font-weight:600;margin:0">\${d.title}</h3>
+            <i data-lucide="${d.icon}" style="width:1.25rem;height:1.25rem;color:var(--pdhc-teal)"></i>
+            <h3 style="font-size:1.1rem;font-weight:600;margin:0">${d.title}</h3>
           </div>
-          <p style="color:var(--pdhc-slate);font-size:0.875rem;margin-bottom:var(--sp-md)">\${d.desc}</p>
-          <a href="/docs/\${d.file}" download class="btn btn-sm btn-secondary"><i data-lucide="download" class="icon-inline"></i> Download</a>
-        </div>\`;
+          <p style="color:var(--pdhc-slate);font-size:0.875rem;margin-bottom:var(--sp-md)">${d.desc}</p>
+          <a href="/docs/${d.file}" download class="btn btn-sm btn-secondary"><i data-lucide="download" class="icon-inline"></i> Download</a>
+        </div>`;
     }
 
-    return \`
+    return `
       <h1 class="page-title">Documentation</h1>
       <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-lg)">Technical documentation for the PDHC Contract Manager. Download any manual as a Markdown file.</p>
 
       <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:var(--sp-base)">Manuals</h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-base);margin-bottom:var(--sp-xl)">
-        \${docs.map(docCard).join("")}
+        ${docs.map(docCard).join("")}
       </div>
 
       <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:var(--sp-base)">Runbooks</h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-base)">
-        \${runbooks.map(docCard).join("")}
-      </div>\`;
+        ${runbooks.map(docCard).join("")}
+      </div>`;
   }
 
   // ──────────────────────────────────────────
@@ -800,16 +800,16 @@
 
     const methodColor = { GET: "var(--pdhc-success)", POST: "var(--pdhc-info)", PUT: "var(--pdhc-warning)", DELETE: "var(--pdhc-danger)" };
 
-    const rows = endpoints.map(e => \`
+    const rows = endpoints.map(e => `
       <tr>
-        <td><span class="mono" style="font-weight:600;color:\${methodColor[e.method] || 'inherit'}">\${e.method}</span></td>
-        <td class="mono" style="font-size:0.8125rem">\${esc(e.path)}</td>
-        <td><span class="badge \${e.auth === 'Admin' ? 'badge-warning' : 'badge-success'}" style="font-size:0.75rem">\${e.auth}</span></td>
-        <td style="text-align:center">\${e.rate}</td>
-        <td>\${e.desc}</td>
-      </tr>\`).join("");
+        <td><span class="mono" style="font-weight:600;color:${methodColor[e.method] || 'inherit'}">${e.method}</span></td>
+        <td class="mono" style="font-size:0.8125rem">${esc(e.path)}</td>
+        <td><span class="badge ${e.auth === 'Admin' ? 'badge-warning' : 'badge-success'}" style="font-size:0.75rem">${e.auth}</span></td>
+        <td style="text-align:center">${e.rate}</td>
+        <td>${e.desc}</td>
+      </tr>`).join("");
 
-    return \`
+    return `
       <h1 class="page-title">API Reference</h1>
       <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-lg)">
         All endpoints on <span class="mono">localhost:9021</span>. FHIR endpoints return <span class="mono">application/fhir+json</span>.
@@ -823,7 +823,7 @@
         <div class="table-wrap">
           <table>
             <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Rate&nbsp;Limit</th><th>Description</th></tr></thead>
-            <tbody>\${rows}</tbody>
+            <tbody>${rows}</tbody>
           </table>
         </div>
       </div>
@@ -877,7 +877,7 @@ Content-Type: application/json
           <li><strong>Versioning:</strong> not supported</li>
           <li><strong>History:</strong> not supported</li>
         </ul>
-      </div>\`;
+      </div>`;
   }
 
   // ──────────────────────────────────────────
