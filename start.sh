@@ -6,32 +6,21 @@ set -e
 # macOS gunicorn fork safety fix
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
-# Detect Colima Docker socket (Docker CLI v29 ignores DOCKER_HOST env var)
-DOCKER_SOCK=""
-for sock in \
-    "$HOME/.colima/default/docker.sock" \
-    "/Users/$(whoami)/.colima/default/docker.sock" \
-    "/var/run/docker.sock"; do
-    if [ -S "$sock" ]; then
-        DOCKER_SOCK="$sock"
-        break
-    fi
-done
+# Docker CLI v29 uses contexts, not DOCKER_HOST. Unset to avoid conflicts.
+unset DOCKER_HOST
 
-# Docker CLI v29 ignores DOCKER_HOST — must pass -H explicitly
-if [ -n "$DOCKER_SOCK" ]; then
-    DOCKER="docker -H unix://$DOCKER_SOCK"
-else
-    DOCKER="docker"
+# Ensure the colima docker context is active (if colima is in use)
+if docker context ls --format '{{.Name}}' 2>/dev/null | grep -q '^colima$'; then
+    docker context use colima >/dev/null 2>&1 || true
 fi
+
+DOCKER="docker"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
 BACKUP_DIR="$SCRIPT_DIR/db_backups"
 
 # Detect docker-compose binary (server uses hyphenated standalone)
-# docker-compose reads DOCKER_HOST, so export it too
-export DOCKER_HOST="${DOCKER_SOCK:+unix://$DOCKER_SOCK}"
 if [ -x /opt/homebrew/bin/docker-compose ]; then
     DC="/opt/homebrew/bin/docker-compose"
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -41,7 +30,7 @@ else
 fi
 
 echo "=== contract.pdhc startup ==="
-echo "  Socket: ${DOCKER_SOCK:-system default}"
+echo "  Docker context: $(docker context show 2>/dev/null || echo unknown)"
 echo "  Compose: $DC"
 
 # 1. Kill any processes on project ports
@@ -61,22 +50,14 @@ if ! $DOCKER ps >/dev/null 2>&1; then
     echo "  Docker not reachable. Attempting to start Colima..."
     if command -v colima >/dev/null 2>&1; then
         colima start 2>/dev/null || true
-        sleep 3
-        # Re-detect socket after Colima start
-        for sock in \
-            "$HOME/.colima/default/docker.sock" \
-            "/Users/$(whoami)/.colima/default/docker.sock"; do
-            if [ -S "$sock" ]; then
-                DOCKER_SOCK="$sock"
-                DOCKER="docker -H unix://$sock"
-                export DOCKER_HOST="unix://$sock"
-                break
-            fi
-        done
+        sleep 5
+        # Activate colima context after start
+        docker context use colima >/dev/null 2>&1 || true
     fi
-    if ! $DOCKER info >/dev/null 2>&1; then
+    if ! $DOCKER ps >/dev/null 2>&1; then
         echo "ERROR: Docker is not running and could not be started."
-        echo "  Socket: $DOCKER_SOCK"
+        echo "  Context: $(docker context show 2>/dev/null || echo unknown)"
+        echo "  Try: colima stop && colima start"
         exit 1
     fi
 fi
