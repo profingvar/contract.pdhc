@@ -97,9 +97,5 @@ echo "  Database: localhost:9020"
 echo "  Health:   http://localhost:9021/health"
 echo "  Metadata: http://localhost:9021/fhir/metadata"
 echo ""
-echo "Press Ctrl+C to stop..."
-
-# 7. Tail logs; Ctrl+C triggers graceful shutdown
-trap 'echo ""; echo "Shutting down..."; cd "$APP_DIR" && $DC down; deactivate 2>/dev/null; echo "Stopped."; exit 0' INT TERM
-
-$DC logs -f
+echo "  Logs:     cd app && $DC logs -f"
+echo "  Stop:     cd app && $DC down"
