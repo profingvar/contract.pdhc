@@ -7,14 +7,21 @@ set -e
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
 # Colima Docker socket (macOS server — not Docker Desktop)
-# Try multiple known socket locations
+# Docker CLI v29+ ignores DOCKER_HOST in favour of contexts.
+# Detect the Colima socket and create/use a docker context for it.
 for sock in \
-    "${DOCKER_HOST#unix://}" \
     "$HOME/.colima/default/docker.sock" \
     "/Users/$(whoami)/.colima/default/docker.sock" \
     "/var/run/docker.sock"; do
     if [ -S "$sock" ]; then
         export DOCKER_HOST="unix://$sock"
+        # Ensure a docker context exists pointing to this socket
+        if docker context inspect colima >/dev/null 2>&1; then
+            docker context use colima >/dev/null 2>&1 || true
+        else
+            docker context create colima --docker "host=unix://$sock" >/dev/null 2>&1 || true
+            docker context use colima >/dev/null 2>&1 || true
+        fi
         break
     fi
 done
