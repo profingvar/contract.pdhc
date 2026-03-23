@@ -1,1383 +1,852 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Contracts — PDHC</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    /* ───────────────────────────────────────────
-       PDHC Design System Tokens
-       ─────────────────────────────────────────── */
-    :root {
-      --pdhc-navy: #1a2332;
-      --pdhc-teal: #0d9488;
-      --pdhc-teal-dark: #0a7a70;
-      --pdhc-teal-light: #e6f7f5;
-      --pdhc-slate: #475569;
-      --pdhc-slate-light: #94a3b8;
-      --pdhc-bg: #f8fafc;
-      --pdhc-surface: #ffffff;
-      --pdhc-border: #e2e8f0;
-      --pdhc-success: #059669;
-      --pdhc-warning: #d97706;
-      --pdhc-danger: #dc2626;
-      --pdhc-info: #2563eb;
-      /* spacing */
-      --sp-xs: 0.25rem;
-      --sp-sm: 0.5rem;
-      --sp-md: 0.75rem;
-      --sp-base: 1rem;
-      --sp-lg: 1.5rem;
-      --sp-xl: 2rem;
-      --sp-2xl: 3rem;
-      --sp-3xl: 4rem;
-    }
+/* PDHC Design System — aligned with sso.pdhc.se */
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --warning: #d97706;
+  --bg: #f8fafc;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #f1f5f9;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6; font-size: 12px;
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { color: var(--primary-dark); text-decoration: underline; }
 
-    /* ── Reset ── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Navbar */
+nav {
+  background: var(--primary); color: white; padding: 0.5rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100;
+}
+.brand { font-weight: 700; font-size: 1rem; text-decoration: none; color: white; display: flex; align-items: center; gap: 0.4rem; }
+.brand:hover { color: white; text-decoration: none; }
+.brand span { opacity: 0.6; font-weight: 400; font-size: 0.85em; }
+.nav-links { display: flex; gap: 0.5rem; align-items: center; list-style: none; }
+.nav-links a {
+  color: rgba(255,255,255,0.9); text-decoration: none; font-size: 0.92em;
+  padding: 0.2rem 0.4rem; border-radius: 4px; transition: background 0.2s;
+  display: inline-flex; align-items: center; gap: 0.25rem;
+}
+.nav-links a:hover { background: rgba(255,255,255,0.15); text-decoration: none; }
+.nav-links a.active { background: rgba(255,255,255,0.2); }
+.nav-separator { width: 1px; height: 1rem; background: rgba(255,255,255,0.3); }
+.nav-user { display: flex; align-items: center; gap: 0.5rem; font-size: 0.92em; color: rgba(255,255,255,0.8); }
+.nav-user .role-tag {
+  font-size: 0.75em; font-weight: 600; text-transform: uppercase;
+  background: rgba(255,255,255,0.2); padding: 1px 6px; border-radius: 9999px;
+}
+.nav-user button {
+  background: none; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.8);
+  font-size: 0.85em; font-weight: 600; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+}
+.nav-user button:hover { border-color: rgba(255,255,255,0.6); color: white; }
+.nav-toggle { display: none; background: none; border: none; color: white; cursor: pointer; }
+@media (max-width: 768px) {
+  .nav-toggle { display: block; }
+  .nav-links { display: none; position: absolute; top: 2.5rem; right: 0; background: var(--primary); flex-direction: column; padding: 0.75rem; border-radius: 0 0 0 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .nav-links.open { display: flex; }
+  nav { flex-wrap: wrap; }
+}
 
-    body {
-      font-family: Inter, system-ui, sans-serif;
-      font-size: 0.9375rem;
-      line-height: 1.6;
-      color: var(--pdhc-navy);
-      background: var(--pdhc-bg);
-      min-height: 100vh;
-    }
+/* Layout */
+.container { max-width: 960px; margin: 0 auto; padding: 1.25rem 1.25rem 2.5rem; }
+h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; }
+h1 + .lead { color: var(--text-muted); font-size: 1em; margin-bottom: 1rem; }
+h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.4rem; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+.page-header h1 { margin-bottom: 0; }
 
-    a { color: var(--pdhc-teal); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+/* Cards */
+.card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.card h2 { margin-top: 0; }
 
-    /* ── Focus ── */
-    :focus-visible {
-      outline: 2px solid var(--pdhc-teal);
-      outline-offset: 2px;
-    }
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.35rem 0.9rem; border: none; border-radius: 5px;
+  font-size: 0.92em; font-weight: 600; cursor: pointer; text-decoration: none;
+  transition: background 0.2s; line-height: 1.4; font-family: inherit;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); color: white; text-decoration: none; }
+.btn-secondary { background: #e2e8f0; color: var(--text); }
+.btn-secondary:hover { background: #cbd5e1; text-decoration: none; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: #b91c1c; color: white; text-decoration: none; }
+.btn-success { background: var(--success); color: white; }
+.btn-sm { padding: 0.2rem 0.6rem; font-size: 0.85em; }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+.btn-group { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
 
-    /* ── Respect reduced motion ── */
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { transition: none !important; animation: none !important; }
-    }
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 1em; }
+th {
+  background: var(--code-bg); font-weight: 600; font-size: 0.92em;
+  text-transform: uppercase; letter-spacing: 0.025em; text-align: left;
+  padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border);
+}
+td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
+tr:hover { background: var(--bg); }
+tr.clickable { cursor: pointer; }
 
-    /* ───────────────────────────────────────────
-       Navbar — fixed top, navy bg
-       ─────────────────────────────────────────── */
-    .navbar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      height: 3.5rem;
-      background: var(--pdhc-navy);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--sp-lg);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-    }
-    .navbar-brand {
-      font-weight: 700;
-      font-size: 1.1rem;
-      letter-spacing: 0.3px;
-      display: flex;
-      align-items: center;
-      gap: var(--sp-sm);
-    }
-    .navbar-brand span { opacity: 0.6; font-weight: 400; font-size: 0.8125rem; }
-    .navbar-links {
-      display: flex;
-      align-items: center;
-      gap: var(--sp-xs);
-      list-style: none;
-    }
-    .navbar-links a {
-      color: rgba(255,255,255,0.75);
-      font-size: 0.8125rem;
-      font-weight: 500;
-      padding: var(--sp-sm) var(--sp-md);
-      border-radius: 0.375rem;
-      transition: color 150ms ease, background 150ms ease;
-      text-decoration: none;
-      position: relative;
-    }
-    .navbar-links a:hover { color: #fff; background: rgba(255,255,255,0.08); }
-    .navbar-links a.active {
-      color: #fff;
-      border-bottom: 2px solid var(--pdhc-teal);
-      border-radius: 0;
-      padding-bottom: calc(var(--sp-sm) - 2px);
-    }
-    .navbar-user {
-      display: flex;
-      align-items: center;
-      gap: var(--sp-md);
-      font-size: 0.8125rem;
-      color: rgba(255,255,255,0.7);
-    }
-    .navbar-user .role-tag {
-      font-size: 0.6875rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      background: rgba(13,148,136,0.3);
-      color: var(--pdhc-teal-light);
-      padding: 2px 8px;
-      border-radius: 9999px;
-    }
-    .navbar-user button {
-      background: none;
-      border: 1px solid rgba(255,255,255,0.2);
-      color: rgba(255,255,255,0.7);
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      transition: all 150ms ease;
-    }
-    .navbar-user button:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+/* Badges */
+.badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 9999px; font-size: 0.85em; font-weight: 600; }
+.badge-success { background: #dcfce7; color: #166534; }
+.badge-warning { background: #fef3c7; color: #92400e; }
+.badge-danger { background: #fef2f2; color: #991b1b; }
+.badge-info { background: #dbeafe; color: #1e40af; }
+.badge-pending { background: #fef3c7; color: #92400e; }
 
-    /* Mobile hamburger */
-    .navbar-toggle { display: none; background: none; border: none; color: #fff; cursor: pointer; }
-    @media (max-width: 768px) {
-      .navbar-toggle { display: block; }
-      .navbar-links { display: none; position: absolute; top: 3.5rem; right: 0; background: var(--pdhc-navy); flex-direction: column; padding: var(--sp-base); border-radius: 0 0 0 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-      .navbar-links.open { display: flex; }
-      .navbar-links a.active { border-bottom: none; background: rgba(13,148,136,0.2); border-radius: 0.375rem; padding: var(--sp-sm) var(--sp-md); }
-    }
+/* Forms */
+.form-group { margin-bottom: 0.75rem; }
+.form-group label { display: block; font-weight: 600; margin-bottom: 0.15rem; font-size: 0.92em; }
+.form-control {
+  width: 100%; padding: 0.3rem 0.5rem; border: 1px solid var(--border);
+  border-radius: 5px; font-size: 1em; font-family: inherit; color: var(--text);
+  background: var(--card-bg); transition: border-color 0.2s;
+}
+.form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+select.form-control { appearance: auto; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+@media (max-width: 640px) { .form-row, .form-row-3 { grid-template-columns: 1fr; } }
 
-    /* ───────────────────────────────────────────
-       Page layout
-       ─────────────────────────────────────────── */
-    .page { max-width: 72rem; margin: 0 auto; padding: calc(3.5rem + var(--sp-xl)) var(--sp-lg) var(--sp-xl); }
-    .page-title { font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: var(--pdhc-navy); margin-bottom: var(--sp-lg); }
-    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-lg); flex-wrap: wrap; gap: var(--sp-base); }
-    .page-header .page-title { margin-bottom: 0; }
+/* Detail grid */
+.detail-grid { display: grid; grid-template-columns: 8rem 1fr; gap: 0.3rem 0.75rem; font-size: 1em; }
+.detail-label { font-weight: 600; color: var(--text-muted); }
+.detail-value { color: var(--text); }
 
-    /* ───────────────────────────────────────────
-       Cards
-       ─────────────────────────────────────────── */
-    .card {
-      background: var(--pdhc-surface);
-      border: 1px solid var(--pdhc-border);
-      border-radius: 0.75rem;
-      padding: var(--sp-lg);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .card + .card { margin-top: var(--sp-base); }
-    .card-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      line-height: 1.3;
-      color: var(--pdhc-navy);
-      margin-bottom: var(--sp-base);
-    }
+/* Flash / toast */
+.toast-box { position: fixed; top: 3rem; right: 1rem; z-index: 200; display: flex; flex-direction: column; gap: 0.4rem; }
+.toast { padding: 0.5rem 0.75rem; border-radius: 5px; font-size: 1em; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); animation: slideIn 0.2s ease; }
+.toast-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ───────────────────────────────────────────
-       Stats row
-       ─────────────────────────────────────────── */
-    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-base); margin-bottom: var(--sp-lg); }
-    .stat-card {
-      background: var(--pdhc-surface);
-      border: 1px solid var(--pdhc-border);
-      border-radius: 0.75rem;
-      padding: var(--sp-lg);
-      text-align: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .stat-card .num {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--pdhc-teal);
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .stat-card .label {
-      font-size: 0.8125rem;
-      font-weight: 500;
-      color: var(--pdhc-slate);
-      margin-top: var(--sp-xs);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(30,41,59,0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 300;
+}
+.modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; min-width: 320px; max-width: 420px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+.modal h2 { font-size: 1.1rem; margin-bottom: 0.75rem; }
 
-    /* ───────────────────────────────────────────
-       Buttons
-       ─────────────────────────────────────────── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--sp-sm);
-      min-height: 2.5rem;
-      padding: var(--sp-sm) var(--sp-base);
-      border-radius: 0.5rem;
-      border: 1px solid var(--pdhc-border);
-      background: var(--pdhc-surface);
-      color: var(--pdhc-navy);
-      font-family: Inter, system-ui, sans-serif;
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 150ms ease;
-      text-decoration: none;
-    }
-    .btn:hover { background: var(--pdhc-bg); }
-    .btn-primary {
-      background: var(--pdhc-teal);
-      border-color: var(--pdhc-teal);
-      color: #fff;
-    }
-    .btn-primary:hover { background: var(--pdhc-teal-dark); border-color: var(--pdhc-teal-dark); }
-    .btn-secondary {
-      background: var(--pdhc-surface);
-      border-color: var(--pdhc-teal);
-      color: var(--pdhc-teal);
-    }
-    .btn-secondary:hover { background: var(--pdhc-teal-light); }
-    .btn-danger {
-      background: var(--pdhc-danger);
-      border-color: var(--pdhc-danger);
-      color: #fff;
-    }
-    .btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
-    .btn-ghost {
-      background: none;
-      border: none;
-      color: var(--pdhc-teal);
-      padding: var(--sp-sm);
-    }
-    .btn-ghost:hover { text-decoration: underline; }
-    .btn-sm { min-height: 2rem; padding: var(--sp-xs) var(--sp-sm); font-size: 0.8125rem; }
-    .btn[disabled], .btn.loading { opacity: 0.7; cursor: not-allowed; }
-    .btn.loading { animation: pulse 1.5s ease-in-out infinite; }
-    @keyframes pulse { 0%,100%{opacity:0.7}50%{opacity:0.5} }
-    .btn-group { display: flex; gap: var(--sp-sm); flex-wrap: wrap; }
+/* Login */
+.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+.login-card { width: 340px; }
+.login-card h1 { text-align: center; font-size: 1.4rem; margin-bottom: 1.25rem; }
+.login-card h1 span { color: var(--primary); font-weight: 400; font-size: 0.85em; }
 
-    /* ───────────────────────────────────────────
-       Forms
-       ─────────────────────────────────────────── */
-    .form-group { margin-bottom: var(--sp-base); }
-    .form-group label {
-      display: block;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      color: var(--pdhc-slate);
-      margin-bottom: var(--sp-xs);
-      line-height: 1.4;
-    }
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-      width: 100%;
-      padding: var(--sp-md);
-      border: 1px solid var(--pdhc-border);
-      border-radius: 0.5rem;
-      font-family: Inter, system-ui, sans-serif;
-      font-size: 0.9375rem;
-      color: var(--pdhc-navy);
-      background: var(--pdhc-surface);
-      transition: border-color 150ms ease;
-      outline: none;
-    }
-    .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
-      border-color: var(--pdhc-teal);
-      box-shadow: 0 0 0 2px rgba(13,148,136,0.15);
-    }
-    .form-group input::placeholder { color: var(--pdhc-slate-light); }
-    .form-group textarea {
-      min-height: 200px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8125rem;
-      line-height: 1.5;
-      resize: vertical;
-    }
-    .form-group select { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.5rem; }
-    .form-group .error-msg { font-size: 0.8125rem; color: var(--pdhc-danger); margin-top: var(--sp-xs); }
-    .form-group.has-error input,
-    .form-group.has-error select { border-color: var(--pdhc-danger); }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-base); }
-    @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+/* Empty state */
+.empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); }
 
-    /* ───────────────────────────────────────────
-       Tables
-       ─────────────────────────────────────────── */
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
-    thead th {
-      text-align: left;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--pdhc-slate);
-      background: var(--pdhc-bg);
-      padding: var(--sp-md) var(--sp-base);
-      border-bottom: 1px solid var(--pdhc-border);
-    }
-    tbody td {
-      padding: var(--sp-md) var(--sp-base);
-      border-bottom: 1px solid var(--pdhc-border);
-      vertical-align: middle;
-    }
-    tbody tr:nth-child(even) { background: var(--pdhc-bg); }
-    tbody tr:hover { background: var(--pdhc-teal-light); }
-    tbody tr.clickable { cursor: pointer; }
+/* Dashboard */
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.dash-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); text-align: center;
+}
+.dash-card .count { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+.dash-card .label { font-size: 0.92em; color: var(--text-muted); margin-top: 0.2rem; }
 
-    /* ───────────────────────────────────────────
-       Badges
-       ─────────────────────────────────────────── */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--sp-xs);
-      padding: 0.25rem 0.625rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    .badge-approved, .badge-active, .badge-executed { background: #dcfce7; color: #166534; }
-    .badge-pending, .badge-draft { background: #fef3c7; color: #92400e; }
-    .badge-rejected, .badge-inactive, .badge-cancelled, .badge-entered-in-error { background: #fee2e2; color: #991b1b; }
-    .badge-disputed { background: #fef3c7; color: #92400e; }
-    .badge-info { background: #dbeafe; color: #1e40af; }
-    .badge-admin { background: var(--pdhc-teal-light); color: var(--pdhc-teal-dark); }
-    .badge-reader { background: #dbeafe; color: #1e40af; }
+/* Monospace */
+.mono { font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 0.9em; }
+code { background: var(--code-bg); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.9em; font-family: 'SF Mono', 'Fira Code', Consolas, monospace; }
 
-    /* ───────────────────────────────────────────
-       Toasts (flash messages)
-       ─────────────────────────────────────────── */
-    .toast-container {
-      position: fixed;
-      top: calc(3.5rem + var(--sp-base));
-      right: var(--sp-base);
-      z-index: 200;
-      display: flex;
-      flex-direction: column;
-      gap: var(--sp-sm);
-    }
-    .toast {
-      padding: var(--sp-md) var(--sp-lg);
-      border-radius: 0.5rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-      max-width: 380px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      animation: toastSlide 200ms ease;
-    }
-    .toast[role="status"] { /* aria-live polite by default */ }
-    .toast.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .toast.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    @keyframes toastSlide { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+/* JSON view */
+.json-view {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px;
+  padding: 0.75rem; font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  font-size: 0.85em; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+  max-height: 400px; overflow-y: auto;
+}
 
-    /* ───────────────────────────────────────────
-       Modal
-       ─────────────────────────────────────────── */
-    .modal-overlay {
-      position: fixed; inset: 0;
-      background: rgba(26,35,50,0.5);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 300;
-      animation: fadeIn 150ms ease;
-    }
-    .modal {
-      background: var(--pdhc-surface);
-      border: 1px solid var(--pdhc-border);
-      border-radius: 0.75rem;
-      padding: var(--sp-lg);
-      min-width: 380px;
-      max-width: 480px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-    }
-    .modal h2 { font-size: 1.25rem; font-weight: 700; color: var(--pdhc-navy); margin-bottom: var(--sp-base); }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* Search */
+.search-bar { margin-bottom: 0.75rem; }
+.search-bar input {
+  width: 100%; padding: 0.3rem 0.5rem; border: 1px solid var(--border);
+  border-radius: 5px; font-size: 1em; font-family: inherit; color: var(--text);
+}
+.search-bar input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
 
-    /* ───────────────────────────────────────────
-       Search bar
-       ─────────────────────────────────────────── */
-    .search-bar {
-      display: flex;
-      gap: var(--sp-sm);
-      margin-bottom: var(--sp-base);
-    }
-    .search-bar input {
-      flex: 1;
-      padding: var(--sp-md) var(--sp-base);
-      border: 1px solid var(--pdhc-border);
-      border-radius: 0.5rem;
-      font-size: 0.9375rem;
-      color: var(--pdhc-navy);
-      background: var(--pdhc-surface);
-      outline: none;
-      transition: border-color 150ms ease;
-    }
-    .search-bar input:focus { border-color: var(--pdhc-teal); box-shadow: 0 0 0 2px rgba(13,148,136,0.15); }
+/* Icons */
+i[data-lucide] { width: 1rem; height: 1rem; stroke-width: 1.5; }
+.btn i[data-lucide] { width: 0.85rem; height: 0.85rem; }
 
-    /* ───────────────────────────────────────────
-       Detail / JSON view
-       ─────────────────────────────────────────── */
-    .detail-header {
-      display: flex;
-      align-items: center;
-      gap: var(--sp-md);
-      margin-bottom: var(--sp-lg);
-      flex-wrap: wrap;
-    }
-    .json-view {
-      background: var(--pdhc-bg);
-      border: 1px solid var(--pdhc-border);
-      border-radius: 0.5rem;
-      padding: var(--sp-lg);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8125rem;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 500px;
-      overflow-y: auto;
-      color: var(--pdhc-navy);
-    }
+/* Utility */
+.text-muted { color: var(--text-muted); }
+.text-right { text-align: right; }
+.mt-1 { margin-top: 0.4rem; }
+.mb-1 { margin-bottom: 0.4rem; }
 
-    /* ───────────────────────────────────────────
-       Login
-       ─────────────────────────────────────────── */
-    .login-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: var(--sp-lg);
-    }
-    .login-card { width: 380px; }
-    .login-card h1 {
-      text-align: center;
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: var(--pdhc-navy);
-      margin-bottom: var(--sp-xl);
-    }
-    .login-card h1 span { color: var(--pdhc-teal); font-weight: 400; font-size: 1rem; }
-
-    /* ───────────────────────────────────────────
-       Empty state
-       ─────────────────────────────────────────── */
-    .empty {
-      text-align: center;
-      padding: var(--sp-2xl);
-      color: var(--pdhc-slate);
-      font-size: 0.9375rem;
-    }
-
-    /* ───────────────────────────────────────────
-       Monospace helper
-       ─────────────────────────────────────────── */
-    .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; }
-
-    /* ───────────────────────────────────────────
-       Rate limit notice
-       ─────────────────────────────────────────── */
-    .rate-notice {
-      font-size: 0.75rem;
-      color: var(--pdhc-slate-light);
-      text-align: center;
-      padding: var(--sp-sm);
-    }
-
-    /* Lucide icon sizing */
-    .icon-inline { width: 1.25rem; height: 1.25rem; stroke-width: 1.5; vertical-align: -3px; }
-    .icon-btn { width: 1.5rem; height: 1.5rem; stroke-width: 1.5; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
   </style>
 </head>
 <body>
   <div id="app"></div>
-  <div class="toast-container" id="toasts" aria-live="polite"></div>
+  <div class="toast-box" id="toasts" aria-live="polite"></div>
 
-  <script>
-  // ──────────────────────────────────────────
-  // Config & State
-  // ──────────────────────────────────────────
-  const API = location.port === "9022"
-    ? location.protocol + "//" + location.hostname + ":9021"
-    : location.origin;
+<script>
+// ──────────────────────────────────────────
+// Config & State
+// ──────────────────────────────────────────
+const API = location.port === "9022"
+  ? location.protocol + "//" + location.hostname + ":9021"
+  : location.origin;
 
-  const state = {
-    token: sessionStorage.getItem("token") || null,
-    role: sessionStorage.getItem("role") || null,
-    username: sessionStorage.getItem("username") || null,
-    route: location.hash.slice(1) || "/",
-    contracts: [],
-    users: [],
-  };
+const SSO_URL = "https://sso.pdhc.se";
+const PLAN_URL = "https://plan.pdhc.se";
 
-  function saveAuth(token, role, username) {
-    state.token = token;
-    state.role = role;
-    state.username = username;
-    if (token) {
-      sessionStorage.setItem("token", token);
-      sessionStorage.setItem("role", role);
-      sessionStorage.setItem("username", username);
-    } else {
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("role");
-      sessionStorage.removeItem("username");
-    }
-  }
+const STATUSES = [
+  "amended","appended","cancelled","disputed","entered-in-error",
+  "executable","executed","negotiable","offered","policy",
+  "rejected","renewed","revoked","resolved","terminated"
+];
 
-  function isAdmin() { return state.role === "admin"; }
-  function isLoggedIn() { return !!state.token; }
+const state = {
+  token: sessionStorage.getItem("token") || null,
+  role: sessionStorage.getItem("role") || null,
+  username: sessionStorage.getItem("username") || null,
+  route: location.hash.slice(1) || "/",
+  contracts: [],
+  users: [],
+  organisations: [],
+  planDefinitions: [],
+  orgsLoaded: false,
+  planDefsLoaded: false,
+};
 
-  // ──────────────────────────────────────────
-  // API
-  // ──────────────────────────────────────────
-  async function api(path, opts = {}) {
-    const headers = { "Content-Type": "application/fhir+json", ...(opts.headers || {}) };
-    if (state.token) headers.Authorization = "Bearer " + state.token;
-    try {
-      const res = await fetch(API + path, { ...opts, headers });
-      if (res.status === 401 && state.token) {
-        saveAuth(null, null, null);
-        navigate("/login");
-        toast("Session expired — please log in again", "error");
-        return { ok: false, status: 401, json: null };
-      }
-      const text = await res.text();
-      let json = null;
-      try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
-      return { ok: res.ok, status: res.status, json };
-    } catch (e) {
-      toast("Network error: " + e.message, "error");
-      return { ok: false, status: 0, json: null };
-    }
-  }
+function saveAuth(token, role, username) {
+  state.token = token; state.role = role; state.username = username;
+  if (token) { sessionStorage.setItem("token", token); sessionStorage.setItem("role", role); sessionStorage.setItem("username", username); }
+  else { sessionStorage.removeItem("token"); sessionStorage.removeItem("role"); sessionStorage.removeItem("username"); }
+}
+function isAdmin() { return state.role === "admin"; }
+function isLoggedIn() { return !!state.token; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
-  // ──────────────────────────────────────────
-  // Toast (aria-live for accessibility)
-  // ──────────────────────────────────────────
-  function toast(msg, type = "success") {
-    const el = document.createElement("div");
-    el.className = "toast " + type;
-    el.setAttribute("role", "status");
-    el.textContent = msg;
-    document.getElementById("toasts").appendChild(el);
-    setTimeout(() => el.remove(), 4000);
-  }
-
-  // ──────────────────────────────────────────
-  // Router
-  // ──────────────────────────────────────────
-  function navigate(path) { location.hash = path; }
-  window.addEventListener("hashchange", () => {
-    state.route = location.hash.slice(1) || "/";
-    render();
-  });
-
-  // ──────────────────────────────────────────
-  // Render
-  // ──────────────────────────────────────────
-  function render() {
-    const route = state.route;
-    const app = document.getElementById("app");
-
-    if (route === "/login") {
-      app.innerHTML = renderLogin();
-      bindLogin();
-      reinitIcons();
-      return;
-    }
-
-    let content = "";
-    if (!isLoggedIn()) {
-      if (route === "/" || route.startsWith("/contracts") || route === "/docs" || route === "/api") {
-        content = renderPublicContent(route);
-        app.innerHTML = renderNavbar() + `<div class="page">${content}</div>`;
-        bindPublic(route);
-        reinitIcons();
-        return;
-      }
-      navigate("/login");
-      return;
-    }
-
-    if (route === "/" || route === "/dashboard") content = renderDashboard();
-    else if (route === "/contracts") content = renderContractsList();
-    else if (route === "/contracts/new") content = renderContractEditor(null);
-    else if (route.startsWith("/contracts/edit/")) content = renderContractEditor(route.split("/contracts/edit/")[1]);
-    else if (route.startsWith("/contracts/")) content = renderContractDetail(route.split("/contracts/")[1]);
-    else if (route === "/users") content = renderUsersList();
-    else if (route === "/docs") content = renderDocsPage();
-    else if (route === "/api") content = renderApiPage();
-    else content = renderDashboard();
-
-    app.innerHTML = renderNavbar() + `<div class="page">${content}</div>`;
-    bindPage(route);
-    reinitIcons();
-  }
-
-  function reinitIcons() {
-    if (window.lucide) lucide.createIcons();
-  }
-
-  // ──────────────────────────────────────────
-  // Navbar
-  // ──────────────────────────────────────────
-  function renderNavbar() {
-    const route = state.route;
-    const isAuth = isLoggedIn();
-    const admin = isAdmin();
-
-    let links = "";
-    if (admin) {
-      links += `<a href="#/dashboard" class="${route === '/dashboard' || route === '/' ? 'active' : ''}"><i data-lucide="layout-dashboard" class="icon-inline"></i> Dashboard</a>`;
-    }
-    links += `<a href="#/contracts" class="${route.startsWith('/contracts') ? 'active' : ''}"><i data-lucide="file-text" class="icon-inline"></i> Contracts</a>`;
-    links += `<a href="#/docs" class="${route === '/docs' ? 'active' : ''}"><i data-lucide="book-open" class="icon-inline"></i> Docs</a>`;
-    links += `<a href="#/api" class="${route === '/api' ? 'active' : ''}"><i data-lucide="code" class="icon-inline"></i> API</a>`;
-    if (admin) {
-      links += `<a href="#/users" class="${route === '/users' ? 'active' : ''}"><i data-lucide="users" class="icon-inline"></i> Users</a>`;
-    }
-
-    const userArea = isAuth
-      ? `<div class="navbar-user">
-           <span>${esc(state.username)}</span>
-           <span class="role-tag">${state.role}</span>
-           <button onclick="logout()">Logout</button>
-         </div>`
-      : `<div class="navbar-user"><a href="#/login" style="color:rgba(255,255,255,0.8)"><i data-lucide="log-in" class="icon-inline"></i> Login</a></div>`;
-
-    return `
-      <nav class="navbar" role="navigation" aria-label="Main navigation">
-        <div class="navbar-brand"><i data-lucide="heart-pulse" class="icon-btn"></i> Contracts <span>PDHC</span></div>
-        <button class="navbar-toggle" onclick="document.querySelector('.navbar-links').classList.toggle('open')" aria-label="Toggle menu"><i data-lucide="menu" class="icon-btn"></i></button>
-        <div class="navbar-links">${links}</div>
-        ${userArea}
-      </nav>`;
-  }
-
-  // ──────────────────────────────────────────
-  // Login page
-  // ──────────────────────────────────────────
-  function renderLogin() {
-    return `
-      <div class="login-container">
-        <div class="card login-card">
-          <h1>Contracts <span>PDHC</span></h1>
-          <div class="form-group">
-            <label for="login-user">Username</label>
-            <input id="login-user" autocomplete="username"/>
-          </div>
-          <div class="form-group">
-            <label for="login-pass">Password</label>
-            <input id="login-pass" type="password" autocomplete="current-password"/>
-          </div>
-          <div class="btn-group" style="flex-direction:column;gap:var(--sp-sm)">
-            <button class="btn btn-primary" id="login-btn" style="width:100%;justify-content:center">
-              <i data-lucide="log-in" class="icon-inline"></i> Login
-            </button>
-            <button class="btn btn-ghost" onclick="navigate('/contracts')" style="width:100%;justify-content:center">
-              Browse contracts (public)
-            </button>
-          </div>
-          <p class="rate-notice" style="margin-top:var(--sp-base)">Public reads are rate-limited to 100 per hour</p>
-        </div>
-      </div>`;
-  }
-
-  function bindLogin() {
-    const btn = document.getElementById("login-btn");
-    const passInput = document.getElementById("login-pass");
-    async function doLogin() {
-      const username = document.getElementById("login-user").value;
-      const password = passInput.value;
-      if (!username || !password) { toast("Enter username and password", "error"); return; }
-      btn.classList.add("loading");
-      btn.disabled = true;
-      const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
-      btn.classList.remove("loading");
-      btn.disabled = false;
-      if (r.ok) {
-        saveAuth(r.json.access_token, r.json.role, username);
-        toast("Logged in as " + username);
-        navigate("/dashboard");
-      } else {
-        toast(r.json?.error || "Invalid credentials", "error");
-      }
-    }
-    btn.onclick = doLogin;
-    passInput.addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
-  }
-
-  function logout() {
-    saveAuth(null, null, null);
-    toast("Logged out");
-    navigate("/");
-  }
-
-  // ──────────────────────────────────────────
-  // Docs page
-  // ──────────────────────────────────────────
-  function renderDocsPage() {
-    const docs = [
-      {
-        icon: "settings",
-        title: "Operator Manual",
-        file: "operator-manual.md",
-        desc: "Start/stop the stack, backup/restore the database, run tests, and troubleshoot common failures."
-      },
-      {
-        icon: "shield",
-        title: "Admin Manual",
-        file: "admin-manual.md",
-        desc: "Authentication, user lifecycle (create, role assignment, reset, deactivate), contract CRUD, and rate limiting."
-      },
-      {
-        icon: "code",
-        title: "API Reference",
-        file: "api.md",
-        desc: "Complete endpoint reference with request/response examples, error model, and FHIR conformance details."
-      },
-      {
-        icon: "boxes",
-        title: "Architecture",
-        file: "architecture.md",
-        desc: "Container topology, port map, data flows, data model (Users + ContractRecords), and security posture."
-      },
-    ];
-
-    const runbooks = [
-      { icon: "key-round", title: "Credential Rotation", file: "runbooks/credential-rotation.md", desc: "Rotate JWT keys, admin passwords, and database credentials." },
-      { icon: "alert-triangle", title: "Incident Response", file: "runbooks/incident-response.md", desc: "Triage checklist and recovery procedures." },
-      { icon: "arrow-up-circle", title: "Upgrade Procedure", file: "runbooks/upgrade-procedure.md", desc: "Pre-upgrade checklist, upgrade steps, rollback." },
-    ];
-
-    function docCard(d) {
-      return `
-        <div class="card" style="margin-bottom:var(--sp-base)">
-          <div style="display:flex;align-items:center;gap:var(--sp-sm);margin-bottom:var(--sp-sm)">
-            <i data-lucide="${d.icon}" style="width:1.25rem;height:1.25rem;color:var(--pdhc-teal)"></i>
-            <h3 style="font-size:1.1rem;font-weight:600;margin:0">${d.title}</h3>
-          </div>
-          <p style="color:var(--pdhc-slate);font-size:0.875rem;margin-bottom:var(--sp-md)">${d.desc}</p>
-          <a href="/docs/${d.file}" download class="btn btn-sm btn-secondary"><i data-lucide="download" class="icon-inline"></i> Download</a>
-        </div>`;
-    }
-
-    return `
-      <h1 class="page-title">Documentation</h1>
-      <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-lg)">Technical documentation for the PDHC Contract Manager. Download any manual as a Markdown file.</p>
-
-      <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:var(--sp-base)">Manuals</h2>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-base);margin-bottom:var(--sp-xl)">
-        ${docs.map(docCard).join("")}
-      </div>
-
-      <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:var(--sp-base)">Runbooks</h2>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-base)">
-        ${runbooks.map(docCard).join("")}
-      </div>`;
-  }
-
-  // ──────────────────────────────────────────
-  // API Reference page
-  // ──────────────────────────────────────────
-  function renderApiPage() {
-    const endpoints = [
-      { method: "GET",    path: "/health",                              auth: "None",  rate: "—",       desc: "Service health check" },
-      { method: "POST",   path: "/auth/login",                          auth: "None",  rate: "—",       desc: "Authenticate, receive JWT" },
-      { method: "GET",    path: "/fhir/metadata",                       auth: "None",  rate: "100/hr",  desc: "FHIR R5 CapabilityStatement" },
-      { method: "GET",    path: "/fhir/Contract",                       auth: "None",  rate: "100/hr",  desc: "List contracts (Bundle)" },
-      { method: "GET",    path: "/fhir/Contract/{guid}",                auth: "None",  rate: "100/hr",  desc: "Read single contract" },
-      { method: "POST",   path: "/fhir/Contract",                       auth: "Admin", rate: "—",       desc: "Create contract" },
-      { method: "PUT",    path: "/fhir/Contract/{guid}",                auth: "Admin", rate: "—",       desc: "Update contract" },
-      { method: "DELETE", path: "/fhir/Contract/{guid}",                auth: "Admin", rate: "—",       desc: "Delete contract" },
-      { method: "GET",    path: "/admin/users",                         auth: "Admin", rate: "—",       desc: "List users" },
-      { method: "POST",   path: "/admin/users",                         auth: "Admin", rate: "—",       desc: "Create user" },
-      { method: "PUT",    path: "/admin/users/{guid}",                  auth: "Admin", rate: "—",       desc: "Update user role/status" },
-      { method: "POST",   path: "/admin/users/{guid}/reset-password",   auth: "Admin", rate: "—",       desc: "Reset user password" },
-    ];
-
-    const methodColor = { GET: "var(--pdhc-success)", POST: "var(--pdhc-info)", PUT: "var(--pdhc-warning)", DELETE: "var(--pdhc-danger)" };
-
-    const rows = endpoints.map(e => `
-      <tr>
-        <td><span class="mono" style="font-weight:600;color:${methodColor[e.method] || 'inherit'}">${e.method}</span></td>
-        <td class="mono" style="font-size:0.8125rem">${esc(e.path)}</td>
-        <td><span class="badge ${e.auth === 'Admin' ? 'badge-warning' : 'badge-success'}" style="font-size:0.75rem">${e.auth}</span></td>
-        <td style="text-align:center">${e.rate}</td>
-        <td>${e.desc}</td>
-      </tr>`).join("");
-
-    return `
-      <h1 class="page-title">API Reference</h1>
-      <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-lg)">
-        All endpoints on <span class="mono">localhost:9021</span>. FHIR endpoints return <span class="mono">application/fhir+json</span>.
-        <a href="/fhir/metadata" target="_blank" rel="noopener" style="color:var(--pdhc-teal);margin-left:var(--sp-sm)">
-          <i data-lucide="external-link" class="icon-inline"></i> View CapabilityStatement
-        </a>
-      </p>
-
-      <div class="card" style="margin-bottom:var(--sp-xl)">
-        <h2 class="card-title" style="margin-bottom:var(--sp-base)">Endpoints</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Rate&nbsp;Limit</th><th>Description</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:var(--sp-lg)">
-        <h2 class="card-title" style="margin-bottom:var(--sp-base)">Authentication</h2>
-        <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-sm)">Obtain a JWT token via <span class="mono">POST /auth/login</span>:</p>
-        <div class="json-view">POST /auth/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "your-password"
+// ──────────────────────────────────────────
+// API
+// ──────────────────────────────────────────
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/fhir+json", ...(opts.headers || {}) };
+  if (state.token) headers.Authorization = "Bearer " + state.token;
+  try {
+    const res = await fetch(API + path, { ...opts, headers });
+    if (res.status === 401 && state.token) { saveAuth(null, null, null); navigate("/login"); toast("Session expired", "error"); return { ok: false, status: 401, json: null }; }
+    const text = await res.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+    return { ok: res.ok, status: res.status, json };
+  } catch (e) { toast("Network error: " + e.message, "error"); return { ok: false, status: 0, json: null }; }
 }
 
-→ 200 { "access_token": "eyJ...", "role": "admin" }</div>
-        <p style="color:var(--pdhc-slate);margin-top:var(--sp-sm)">Use the token on admin endpoints:</p>
-        <div class="json-view">Authorization: Bearer eyJ...</div>
-        <p style="color:var(--pdhc-slate-light);font-size:0.8125rem;margin-top:var(--sp-sm)">Tokens expire after 8 hours.</p>
-      </div>
+// ──────────────────────────────────────────
+// External data fetchers
+// ──────────────────────────────────────────
+async function loadOrganisations() {
+  if (state.orgsLoaded) return state.organisations;
+  try {
+    const res = await fetch(SSO_URL + "/api/public/organisations");
+    if (res.ok) { state.organisations = await res.json(); state.orgsLoaded = true; }
+  } catch (e) { console.warn("Could not load organisations:", e.message); }
+  return state.organisations;
+}
 
-      <div class="card" style="margin-bottom:var(--sp-lg)">
-        <h2 class="card-title" style="margin-bottom:var(--sp-base)">Error Model</h2>
-        <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-sm)">All errors return JSON with this shape:</p>
-        <div class="json-view">{
-  "error": "error_code",
-  "message": "Human-readable description"
-}</div>
-        <div style="margin-top:var(--sp-base)">
-          <p style="font-size:0.875rem"><strong>Status codes:</strong>
-            <span class="badge badge-success" style="font-size:0.75rem">200</span> OK,
-            <span class="badge badge-success" style="font-size:0.75rem">201</span> Created,
-            <span class="badge badge-success" style="font-size:0.75rem">204</span> Deleted,
-            <span class="badge badge-warning" style="font-size:0.75rem">400</span> Validation,
-            <span class="badge badge-warning" style="font-size:0.75rem">401</span> Unauthorized,
-            <span class="badge badge-warning" style="font-size:0.75rem">403</span> Forbidden,
-            <span class="badge badge-warning" style="font-size:0.75rem">404</span> Not Found,
-            <span class="badge badge-warning" style="font-size:0.75rem">409</span> Conflict,
-            <span class="badge" style="font-size:0.75rem;background:var(--pdhc-danger);color:white">429</span> Rate Limited
-          </p>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title" style="margin-bottom:var(--sp-base)">FHIR Conformance</h2>
-        <ul style="color:var(--pdhc-slate);padding-left:var(--sp-lg);line-height:2">
-          <li><strong>FHIR Version:</strong> R5 (5.0.0)</li>
-          <li><strong>Resource:</strong> Contract</li>
-          <li><strong>Bundle:</strong> searchset type for list responses</li>
-          <li><strong>IDs:</strong> UUID v4 strings (GUIDs)</li>
-          <li><strong>Versioning:</strong> not supported</li>
-          <li><strong>History:</strong> not supported</li>
-        </ul>
-      </div>`;
-  }
-
-  // ──────────────────────────────────────────
-  // Public content
-  // ──────────────────────────────────────────
-  function renderPublicContent(route) {
-    if (route === "/docs") return renderDocsPage();
-    if (route === "/api") return renderApiPage();
-    if (route.startsWith("/contracts/") && route !== "/contracts") {
-      return `
-        <div class="detail-header">
-          <button class="btn btn-sm" onclick="navigate('/contracts')"><i data-lucide="arrow-left" class="icon-inline"></i> Back</button>
-          <h1 class="page-title" style="margin:0;font-size:1.25rem">Contract Detail</h1>
-        </div>
-        <div class="card" id="public-detail"><div class="empty">Loading...</div></div>`;
+async function loadPlanDefinitions() {
+  if (state.planDefsLoaded) return state.planDefinitions;
+  try {
+    const res = await fetch(PLAN_URL + "/PlanDefinition");
+    if (res.ok) {
+      const bundle = await res.json();
+      state.planDefinitions = (bundle.entry || []).map(e => e.resource);
+      state.planDefsLoaded = true;
     }
-    return `
-      <h1 class="page-title">Contracts</h1>
-      <div class="search-bar">
-        <input id="search-input" placeholder="Search contracts..." aria-label="Search contracts"/>
-      </div>
-      <div class="card" id="contracts-table"><div class="empty">Loading contracts...</div></div>
-      <p class="rate-notice" style="margin-top:var(--sp-base)">Public reads: 100 requests per hour</p>`;
+  } catch (e) { console.warn("Could not load PlanDefinitions:", e.message); }
+  return state.planDefinitions;
+}
+
+// ──────────────────────────────────────────
+// Toast
+// ──────────────────────────────────────────
+function toast(msg, type = "success") {
+  const el = document.createElement("div");
+  el.className = "toast toast-" + type;
+  el.setAttribute("role", "status");
+  el.textContent = msg;
+  document.getElementById("toasts").appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ──────────────────────────────────────────
+// Router
+// ──────────────────────────────────────────
+function navigate(path) { location.hash = path; }
+window.addEventListener("hashchange", () => { state.route = location.hash.slice(1) || "/"; render(); });
+
+// ──────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────
+function statusBadge(status) {
+  const cls = {
+    executed: "badge-success", executable: "badge-success",
+    offered: "badge-info", negotiable: "badge-info", policy: "badge-info",
+    amended: "badge-warning", appended: "badge-warning", renewed: "badge-warning", disputed: "badge-warning", resolved: "badge-pending",
+    cancelled: "badge-danger", rejected: "badge-danger", revoked: "badge-danger", terminated: "badge-danger", "entered-in-error": "badge-danger",
+  };
+  return `<span class="badge ${cls[status] || 'badge-info'}">${esc(status || "—")}</span>`;
+}
+
+function getParty(contract, roleCode) {
+  if (!contract.party) return null;
+  const p = contract.party.find(p => p.role && p.role[0] && p.role[0].coding && p.role[0].coding[0] && p.role[0].coding[0].code === roleCode);
+  if (!p || !p.reference || !p.reference[0]) return null;
+  return p.reference[0].display || p.reference[0].reference || "—";
+}
+
+function getTopic(contract) {
+  if (!contract.topic || !contract.topic[0]) return null;
+  return contract.topic[0].display || contract.topic[0].reference || "—";
+}
+
+function fmtDate(d) { return d ? d.slice(0, 10) : "—"; }
+
+// ──────────────────────────────────────────
+// Render
+// ──────────────────────────────────────────
+function render() {
+  const route = state.route;
+  const app = document.getElementById("app");
+
+  if (route === "/login") { app.innerHTML = renderLogin(); bindLogin(); icons(); return; }
+
+  const publicRoutes = ["/", "/contracts", "/docs", "/api"];
+  const isPublicRoute = publicRoutes.includes(route) || route.startsWith("/contracts/");
+
+  if (!isLoggedIn() && isPublicRoute) {
+    app.innerHTML = renderNav() + '<div class="container">' + renderPublic(route) + '</div>';
+    bindPublic(route);
+    icons();
+    return;
   }
+  if (!isLoggedIn()) { navigate("/login"); return; }
 
-  async function bindPublic(route) {
-    if (route === "/docs" || route === "/api") return;
-    if (route.startsWith("/contracts/") && route !== "/contracts") {
-      const guid = route.split("/contracts/")[1];
-      const r = await api("/fhir/Contract/" + guid);
-      const el = document.getElementById("public-detail");
-      if (!el) return;
-      if (r.ok) {
-        el.innerHTML = `
-          <p style="font-size:0.8125rem;color:var(--pdhc-slate);margin-bottom:var(--sp-base)">
-            <i data-lucide="hash" class="icon-inline"></i>
-            <span class="mono">${esc(guid)}</span>
-          </p>
-          <div class="json-view">${esc(JSON.stringify(r.json, null, 2))}</div>`;
-      } else {
-        el.innerHTML = '<div class="empty">Contract not found</div>';
-      }
-      reinitIcons();
-      return;
-    }
+  let content = "";
+  if (route === "/" || route === "/dashboard") content = renderDashboard();
+  else if (route === "/contracts") content = renderContractsList();
+  else if (route === "/contracts/new") content = renderEditor(null);
+  else if (route.startsWith("/contracts/edit/")) content = renderEditor(route.split("/contracts/edit/")[1]);
+  else if (route.startsWith("/contracts/")) content = renderDetail(route.split("/contracts/")[1]);
+  else if (route === "/users") content = renderUsers();
+  else if (route === "/docs") content = renderDocs();
+  else if (route === "/api") content = renderApiRef();
+  else content = renderDashboard();
 
-    const r = await api("/fhir/Contract");
-    if (!r.ok) return;
-    state.contracts = (r.json?.entry || []).map(e => e.resource);
-    renderContractsTable(state.contracts);
+  app.innerHTML = renderNav() + '<div class="container">' + content + '</div>';
+  bindPage(route);
+  icons();
+}
 
-    const searchInput = document.getElementById("search-input");
-    if (searchInput) {
-      let debounce;
-      searchInput.addEventListener("input", () => {
-        clearTimeout(debounce);
-        debounce = setTimeout(() => {
-          const q = searchInput.value.toLowerCase();
-          renderContractsTable(state.contracts.filter(c => JSON.stringify(c).toLowerCase().includes(q)));
-        }, 200);
-      });
-    }
+function icons() { if (window.lucide) lucide.createIcons(); }
+
+// ──────────────────────────────────────────
+// Navbar
+// ──────────────────────────────────────────
+function renderNav() {
+  const r = state.route;
+  const admin = isAdmin();
+  const auth = isLoggedIn();
+  let links = "";
+  if (admin) links += `<a href="#/dashboard" class="${r === '/' || r === '/dashboard' ? 'active' : ''}"><i data-lucide="layout-dashboard"></i> Dashboard</a>`;
+  links += `<a href="#/contracts" class="${r.startsWith('/contracts') ? 'active' : ''}"><i data-lucide="file-text"></i> Contracts</a>`;
+  links += `<a href="#/docs" class="${r === '/docs' ? 'active' : ''}"><i data-lucide="book-open"></i> Docs</a>`;
+  links += `<a href="#/api" class="${r === '/api' ? 'active' : ''}"><i data-lucide="code"></i> API</a>`;
+  if (admin) links += `<span class="nav-separator"></span><a href="#/users" class="${r === '/users' ? 'active' : ''}"><i data-lucide="users"></i> Users</a>`;
+
+  const user = auth
+    ? `<div class="nav-user"><span>${esc(state.username)}</span><span class="role-tag">${state.role}</span><button onclick="logout()">Logout</button></div>`
+    : `<div class="nav-user"><a href="#/login" style="color:rgba(255,255,255,0.9)">Login</a></div>`;
+
+  return `<nav>
+    <a class="brand" href="#/"><i data-lucide="file-signature"></i> Contracts <span>PDHC</span></a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><i data-lucide="menu"></i></button>
+    <div class="nav-links">${links}</div>
+    ${user}
+  </nav>`;
+}
+
+// ──────────────────────────────────────────
+// Login
+// ──────────────────────────────────────────
+function renderLogin() {
+  return `<div class="login-wrap"><div class="card login-card">
+    <h1>Contracts <span>PDHC</span></h1>
+    <div class="form-group"><label for="l-user">Username</label><input id="l-user" class="form-control" autocomplete="username"></div>
+    <div class="form-group"><label for="l-pass">Password</label><input id="l-pass" class="form-control" type="password" autocomplete="current-password"></div>
+    <div class="btn-group" style="flex-direction:column">
+      <button class="btn btn-primary" id="l-btn" style="width:100%;justify-content:center"><i data-lucide="log-in"></i> Login</button>
+      <button class="btn btn-secondary" onclick="navigate('/contracts')" style="width:100%;justify-content:center">Browse contracts (public)</button>
+    </div>
+  </div></div>`;
+}
+function bindLogin() {
+  const btn = document.getElementById("l-btn");
+  async function go() {
+    const u = document.getElementById("l-user").value, p = document.getElementById("l-pass").value;
+    if (!u || !p) { toast("Enter username and password", "error"); return; }
+    btn.disabled = true;
+    const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) });
+    btn.disabled = false;
+    if (r.ok) { saveAuth(r.json.access_token, r.json.role, u); toast("Logged in"); navigate("/dashboard"); }
+    else toast(r.json?.error || "Invalid credentials", "error");
   }
+  btn.onclick = go;
+  document.getElementById("l-pass").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+}
+function logout() { saveAuth(null, null, null); toast("Logged out"); navigate("/"); }
 
-  // ──────────────────────────────────────────
-  // Dashboard
-  // ──────────────────────────────────────────
-  function renderDashboard() {
-    return `
-      <h1 class="page-title">Dashboard</h1>
-      <div class="stats-row">
-        <div class="stat-card"><div class="num" id="stat-contracts">—</div><div class="label"><i data-lucide="file-text" class="icon-inline"></i> Contracts</div></div>
-        <div class="stat-card"><div class="num" id="stat-users">—</div><div class="label"><i data-lucide="users" class="icon-inline"></i> Users</div></div>
-        <div class="stat-card"><div class="num" id="stat-api">—</div><div class="label"><i data-lucide="activity" class="icon-inline"></i> API</div></div>
-      </div>
-      <div class="card">
-        <h2 class="card-title">Recent Contracts</h2>
-        <div id="recent-contracts"><div class="empty">Loading...</div></div>
-      </div>`;
-  }
+// ──────────────────────────────────────────
+// Public content
+// ──────────────────────────────────────────
+function renderPublic(route) {
+  if (route === "/docs") return renderDocs();
+  if (route === "/api") return renderApiRef();
+  if (route.startsWith("/contracts/") && route !== "/contracts")
+    return `<div class="page-header"><button class="btn btn-sm btn-secondary" onclick="navigate('/contracts')"><i data-lucide="arrow-left"></i> Back</button><h1 style="margin:0">Contract Detail</h1></div><div class="card" id="pub-detail"><div class="empty">Loading...</div></div>`;
+  return `<h1>Contracts</h1><div class="search-bar"><input id="search" class="form-control" placeholder="Search contracts..." aria-label="Search"></div><div id="ct-table"><div class="empty">Loading...</div></div>`;
+}
 
-  // ──────────────────────────────────────────
-  // Contracts
-  // ──────────────────────────────────────────
-  function renderContractsList() {
-    return `
-      <div class="page-header">
-        <h1 class="page-title">Contracts</h1>
-        ${isAdmin() ? '<button class="btn btn-primary" onclick="navigate(\'/contracts/new\')"><i data-lucide="plus" class="icon-inline"></i> New Contract</button>' : ''}
-      </div>
-      <div class="search-bar">
-        <input id="search-input" placeholder="Search contracts..." aria-label="Search contracts"/>
-      </div>
-      <div class="card"><div class="table-wrap" id="contracts-table"><div class="empty">Loading...</div></div></div>`;
-  }
-
-  function renderContractsTable(contracts) {
-    const el = document.getElementById("contracts-table");
+async function bindPublic(route) {
+  if (route === "/docs" || route === "/api") return;
+  if (route.startsWith("/contracts/") && route !== "/contracts") {
+    const guid = route.split("/contracts/")[1];
+    const r = await api("/fhir/Contract/" + guid);
+    const el = document.getElementById("pub-detail");
     if (!el) return;
-    if (!contracts.length) { el.innerHTML = '<div class="empty"><i data-lucide="inbox" class="icon-btn" style="display:block;margin:0 auto var(--sp-sm)"></i>No contracts found</div>'; reinitIcons(); return; }
-    const admin = isAdmin();
-    el.innerHTML = `
-      <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>ID</th>
-          <th>Status</th>
-          <th>Period</th>
-          ${admin ? '<th style="text-align:right">Actions</th>' : ''}
-        </tr></thead>
-        <tbody>
-          ${contracts.map(c => {
-            const id = c.id || "—";
-            const shortId = id.length > 8 ? id.slice(0, 8) + "..." : id;
-            const status = c.status || "draft";
-            const badgeCls = "badge-" + status.replace(/ /g, "-");
-            const start = c.period?.start ? c.period.start.slice(0, 10) : "—";
-            const end = c.period?.end ? c.period.end.slice(0, 10) : "—";
-            return `<tr class="clickable" onclick="navigate('/contracts/${id}')">
-              <td class="mono" title="${esc(id)}">${esc(shortId)}</td>
-              <td><span class="badge ${badgeCls}">${esc(status)}</span></td>
-              <td style="font-size:0.8125rem;color:var(--pdhc-slate)">${esc(start)} — ${esc(end)}</td>
-              ${admin ? `<td style="text-align:right" onclick="event.stopPropagation()">
-                <button class="btn btn-sm btn-secondary" onclick="navigate('/contracts/edit/${id}')"><i data-lucide="pencil" class="icon-inline"></i> Edit</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteContract('${id}')"><i data-lucide="trash-2" class="icon-inline"></i></button>
-              </td>` : ''}
-            </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-      </div>`;
-    reinitIcons();
+    el.innerHTML = r.ok ? renderDetailContent(r.json) : '<div class="empty">Contract not found</div>';
+    icons(); return;
   }
+  const r = await api("/fhir/Contract");
+  if (!r.ok) return;
+  state.contracts = (r.json?.entry || []).map(e => e.resource);
+  renderTable(state.contracts);
+  const si = document.getElementById("search");
+  if (si) { let t; si.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { const q = si.value.toLowerCase(); renderTable(state.contracts.filter(c => JSON.stringify(c).toLowerCase().includes(q))); }, 200); }); }
+}
 
-  // ──────────────────────────────────────────
-  // Contract detail
-  // ──────────────────────────────────────────
-  function renderContractDetail(guid) {
-    return `
-      <div class="detail-header">
-        <button class="btn btn-sm" onclick="navigate('/contracts')"><i data-lucide="arrow-left" class="icon-inline"></i> Back</button>
-        <h1 class="page-title" style="margin:0;font-size:1.25rem">Contract</h1>
-        <span class="mono" style="color:var(--pdhc-slate)">${esc(guid)}</span>
-        ${isAdmin() ? `<button class="btn btn-sm btn-secondary" onclick="navigate('/contracts/edit/${guid}')" style="margin-left:auto"><i data-lucide="pencil" class="icon-inline"></i> Edit</button>` : ''}
+// ──────────────────────────────────────────
+// Dashboard
+// ──────────────────────────────────────────
+function renderDashboard() {
+  return `<h1>Dashboard</h1>
+    <div class="dash-grid">
+      <div class="dash-card"><div class="count" id="s-ct">—</div><div class="label">Contracts</div></div>
+      <div class="dash-card"><div class="count" id="s-us">—</div><div class="label">Users</div></div>
+      <div class="dash-card"><div class="count" id="s-api">—</div><div class="label">API</div></div>
+    </div>
+    <div class="card"><h2>Recent Contracts</h2><div id="dash-recent"><div class="empty">Loading...</div></div></div>`;
+}
+
+// ──────────────────────────────────────────
+// Contracts list
+// ──────────────────────────────────────────
+function renderContractsList() {
+  return `<div class="page-header"><h1>Contracts</h1>
+    ${isAdmin() ? '<button class="btn btn-primary" onclick="navigate(\'/contracts/new\')"><i data-lucide="plus"></i> New Contract</button>' : ''}
+  </div>
+  <div class="search-bar"><input id="search" class="form-control" placeholder="Search contracts..." aria-label="Search"></div>
+  <div class="card"><div id="ct-table"><div class="empty">Loading...</div></div></div>`;
+}
+
+function renderTable(contracts) {
+  const el = document.getElementById("ct-table");
+  if (!el) return;
+  if (!contracts.length) { el.innerHTML = '<div class="empty">No contracts found</div>'; return; }
+  const admin = isAdmin();
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Title</th><th>Payer</th><th>Provider</th><th>Status</th><th>Period</th>${admin ? '<th class="text-right">Actions</th>' : ''}</tr></thead>
+    <tbody>${contracts.map(c => {
+      const title = c.title || c.name || (c.id ? c.id.slice(0, 8) + "..." : "—");
+      const payer = getParty(c, "payer") || "—";
+      const provider = getParty(c, "provider") || "—";
+      const period = fmtDate(c.period?.start) + " — " + fmtDate(c.period?.end);
+      return `<tr class="clickable" onclick="navigate('/contracts/${c.id}')">
+        <td><strong>${esc(title)}</strong></td><td>${esc(payer)}</td><td>${esc(provider)}</td>
+        <td>${statusBadge(c.status)}</td><td style="white-space:nowrap">${period}</td>
+        ${admin ? `<td class="text-right"><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();navigate('/contracts/edit/${c.id}')"><i data-lucide="pencil"></i></button> <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteContract('${c.id}')"><i data-lucide="trash-2"></i></button></td>` : ''}
+      </tr>`;
+    }).join("")}</tbody></table></div>`;
+  icons();
+}
+
+// ──────────────────────────────────────────
+// Contract detail
+// ──────────────────────────────────────────
+function renderDetail(guid) {
+  return `<div class="page-header">
+    <div class="btn-group"><button class="btn btn-sm btn-secondary" onclick="navigate('/contracts')"><i data-lucide="arrow-left"></i> Back</button>
+    ${isAdmin() ? `<button class="btn btn-sm btn-primary" onclick="navigate('/contracts/edit/${guid}')"><i data-lucide="pencil"></i> Edit</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteContract('${guid}')"><i data-lucide="trash-2"></i> Delete</button>` : ''}
+    </div></div>
+  <div class="card" id="detail-card"><div class="empty">Loading...</div></div>`;
+}
+
+function renderDetailContent(c) {
+  const payer = getParty(c, "payer") || "—";
+  const provider = getParty(c, "provider") || "—";
+  const topic = getTopic(c) || "—";
+  return `<h2>${esc(c.title || c.name || "Contract")}</h2>
+    <div class="detail-grid" style="margin-top:0.75rem">
+      <div class="detail-label">Status</div><div class="detail-value">${statusBadge(c.status)}</div>
+      <div class="detail-label">Payer</div><div class="detail-value">${esc(payer)}</div>
+      <div class="detail-label">Provider</div><div class="detail-value">${esc(provider)}</div>
+      <div class="detail-label">Work Area</div><div class="detail-value">${esc(topic)}</div>
+      <div class="detail-label">Period</div><div class="detail-value">${fmtDate(c.period?.start)} — ${fmtDate(c.period?.end)}</div>
+      <div class="detail-label">Issued</div><div class="detail-value">${fmtDate(c.issued)}</div>
+      <div class="detail-label">ID</div><div class="detail-value"><code>${esc(c.id || "—")}</code></div>
+    </div>
+    <details style="margin-top:1rem"><summary style="cursor:pointer;font-weight:600;font-size:0.92em;color:var(--text-muted)">Raw FHIR JSON</summary>
+      <div class="json-view" style="margin-top:0.5rem">${esc(JSON.stringify(c, null, 2))}</div>
+    </details>`;
+}
+
+// ──────────────────────────────────────────
+// Contract editor
+// ──────────────────────────────────────────
+function renderEditor(guid) {
+  const isEdit = !!guid;
+  return `<div class="page-header"><h1>${isEdit ? "Edit Contract" : "New Contract"}</h1></div>
+  <div class="card" id="editor-card">
+    <div class="form-group"><label for="ed-title">Title</label><input id="ed-title" class="form-control" placeholder="Contract title"></div>
+    <div class="form-row">
+      <div class="form-group"><label for="ed-name">Name</label><input id="ed-name" class="form-control" placeholder="machine-name"></div>
+      <div class="form-group"><label for="ed-status">Status</label>
+        <select id="ed-status" class="form-control">${STATUSES.map(s => `<option value="${s}"${s === "offered" ? " selected" : ""}>${s}</option>`).join("")}</select>
       </div>
-      <div class="card" id="contract-detail"><div class="empty">Loading...</div></div>`;
-  }
-
-  // ──────────────────────────────────────────
-  // Contract editor
-  // ──────────────────────────────────────────
-  function renderContractEditor(guid) {
-    const isEdit = !!guid;
-    return `
-      <div class="detail-header">
-        <button class="btn btn-sm" onclick="navigate('/contracts')"><i data-lucide="arrow-left" class="icon-inline"></i> Back</button>
-        <h1 class="page-title" style="margin:0;font-size:1.25rem">${isEdit ? "Edit" : "New"} Contract</h1>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label for="ed-payer">Payer Organisation</label>
+        <select id="ed-payer" class="form-control"><option value="">Loading organisations...</option></select>
       </div>
-      <div class="card">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="ed-status">Status</label>
-            <select id="ed-status">
-              <option value="draft">Draft</option>
-              <option value="executed">Executed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="disputed">Disputed</option>
-              <option value="entered-in-error">Entered in Error</option>
-            </select>
-          </div>
-          <div class="form-group"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="ed-start">Period Start</label>
-            <input id="ed-start" type="date"/>
-          </div>
-          <div class="form-group">
-            <label for="ed-end">Period End</label>
-            <input id="ed-end" type="date"/>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="ed-narrative">Narrative (text.div)</label>
-          <input id="ed-narrative" placeholder="Agreement description..."/>
-        </div>
-        <div class="form-group">
-          <label for="ed-json">Full FHIR JSON (advanced)</label>
-          <textarea id="ed-json"></textarea>
-        </div>
-        <div class="btn-group">
-          <button class="btn btn-primary" id="ed-save"><i data-lucide="${isEdit ? 'save' : 'plus'}" class="icon-inline"></i> ${isEdit ? "Save Changes" : "Create Contract"}</button>
-          <button class="btn" onclick="navigate('/contracts')">Cancel</button>
-          ${isEdit ? `<button class="btn btn-danger" onclick="deleteContract('${guid}')" style="margin-left:auto"><i data-lucide="trash-2" class="icon-inline"></i> Delete</button>` : ''}
-        </div>
-      </div>`;
-  }
-
-  // ──────────────────────────────────────────
-  // Users
-  // ──────────────────────────────────────────
-  function renderUsersList() {
-    return `
-      <div class="page-header">
-        <h1 class="page-title">Users</h1>
-        <button class="btn btn-primary" id="create-user-btn"><i data-lucide="user-plus" class="icon-inline"></i> New User</button>
+      <div class="form-group"><label for="ed-provider">Provider Organisation</label>
+        <select id="ed-provider" class="form-control"><option value="">Loading organisations...</option></select>
       </div>
-      <div class="card"><div class="table-wrap" id="users-table"><div class="empty">Loading...</div></div></div>`;
+    </div>
+    <div class="form-group"><label for="ed-plandef">Work Area (PlanDefinition)</label>
+      <select id="ed-plandef" class="form-control"><option value="">Loading plan definitions...</option></select>
+    </div>
+    <div class="form-row-3">
+      <div class="form-group"><label for="ed-start">Period Start</label><input id="ed-start" class="form-control" type="date"></div>
+      <div class="form-group"><label for="ed-end">Period End</label><input id="ed-end" class="form-control" type="date"></div>
+      <div class="form-group"><label for="ed-issued">Issued</label><input id="ed-issued" class="form-control" type="date"></div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="ed-save"><i data-lucide="save"></i> ${isEdit ? "Update" : "Create"}</button>
+      <button class="btn btn-secondary" onclick="navigate('/contracts')">Cancel</button>
+      ${isEdit ? `<button class="btn btn-danger" style="margin-left:auto" onclick="deleteContract('${guid}')"><i data-lucide="trash-2"></i> Delete</button>` : ""}
+    </div>
+  </div>`;
+}
+
+function populateSelect(id, items, valueFn, labelFn, placeholder) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = `<option value="">${placeholder}</option>` + items.map(i => `<option value="${esc(valueFn(i))}">${esc(labelFn(i))}</option>`).join("");
+}
+
+async function bindEditor(guid) {
+  // Load external data
+  const [orgs, pds] = await Promise.all([loadOrganisations(), loadPlanDefinitions()]);
+  populateSelect("ed-payer", orgs, o => o.organisation_guid, o => o.name, "— Select Payer —");
+  populateSelect("ed-provider", orgs, o => o.organisation_guid, o => o.name, "— Select Provider —");
+  populateSelect("ed-plandef", pds, p => p.id || p.fhir_id, p => p.title || p.name || p.id, "— Select Work Area —");
+
+  // If editing, load existing contract
+  if (guid) {
+    const r = await api("/fhir/Contract/" + guid);
+    if (!r.ok) { toast("Contract not found", "error"); navigate("/contracts"); return; }
+    const c = r.json;
+    const $ = id => document.getElementById(id);
+    if (c.title) $("ed-title").value = c.title;
+    if (c.name) $("ed-name").value = c.name;
+    if (c.status) $("ed-status").value = c.status;
+    if (c.period?.start) $("ed-start").value = c.period.start.slice(0, 10);
+    if (c.period?.end) $("ed-end").value = c.period.end.slice(0, 10);
+    if (c.issued) $("ed-issued").value = c.issued.slice(0, 10);
+    // Set party pickers
+    const payerRef = getPartyRef(c, "payer");
+    const provRef = getPartyRef(c, "provider");
+    if (payerRef) $("ed-payer").value = payerRef;
+    if (provRef) $("ed-provider").value = provRef;
+    // Set topic picker
+    if (c.topic && c.topic[0] && c.topic[0].reference) {
+      const pdId = c.topic[0].reference.split("/").pop();
+      $("ed-plandef").value = pdId;
+    }
   }
 
-  function renderUsersTable(users) {
-    const el = document.getElementById("users-table");
-    if (!el) return;
-    if (!users.length) { el.innerHTML = '<div class="empty">No users</div>'; return; }
-    el.innerHTML = `
-      <table>
-        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
-        <tbody>
-          ${users.map(u => `<tr>
-            <td><i data-lucide="user" class="icon-inline" style="color:var(--pdhc-slate-light)"></i> ${esc(u.username)}</td>
-            <td><span class="badge badge-${u.role}">${u.role}</span></td>
-            <td><span class="badge badge-${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
-            <td style="font-size:0.8125rem;color:var(--pdhc-slate)">${u.created_at ? u.created_at.slice(0, 10) : '—'}</td>
-            <td style="text-align:right">
-              <button class="btn btn-sm" onclick="showResetPasswordModal('${u.guid}','${esc(u.username)}')"><i data-lucide="key" class="icon-inline"></i> Reset</button>
-              <button class="btn btn-sm btn-secondary" onclick="toggleUserRole('${u.guid}','${u.role}')"><i data-lucide="arrow-right-left" class="icon-inline"></i> ${u.role === 'admin' ? 'reader' : 'admin'}</button>
-              <button class="btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-primary'}" onclick="toggleUserActive('${u.guid}',${u.is_active})">
-                <i data-lucide="${u.is_active ? 'user-x' : 'user-check'}" class="icon-inline"></i>
-              </button>
-            </td>
-          </tr>`).join("")}
-        </tbody>
-      </table>`;
-    reinitIcons();
-  }
-
-  // ──────────────────────────────────────────
-  // Modals
-  // ──────────────────────────────────────────
-  function showModal(html) {
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-    overlay.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
-    document.body.appendChild(overlay);
-    reinitIcons();
-    return overlay;
-  }
-
-  function closeModals() {
-    document.querySelectorAll(".modal-overlay").forEach(el => el.remove());
-  }
-
-  window.showCreateUserModal = function() {
-    showModal(`
-      <h2><i data-lucide="user-plus" class="icon-inline"></i> Create User</h2>
-      <div class="form-group"><label for="mu-user">Username</label><input id="mu-user"/></div>
-      <div class="form-group"><label for="mu-pass">Password</label><input id="mu-pass" type="password"/></div>
-      <div class="form-group"><label for="mu-role">Role</label>
-        <select id="mu-role"><option value="reader">Reader</option><option value="admin">Admin</option></select>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-primary" id="mu-save"><i data-lucide="check" class="icon-inline"></i> Create</button>
-        <button class="btn" onclick="closeModals()">Cancel</button>
-      </div>
-    `);
-    document.getElementById("mu-save").onclick = async () => {
-      const username = document.getElementById("mu-user").value;
-      const password = document.getElementById("mu-pass").value;
-      const role = document.getElementById("mu-role").value;
-      if (!username || !password) { toast("Fill all fields", "error"); return; }
-      const r = await api("/admin/users", { method: "POST", body: JSON.stringify({ username, password, role }) });
-      if (r.ok) { toast("User created"); closeModals(); loadUsers(); }
-      else toast(r.json?.message || "Failed", "error");
-    };
+  // Save handler
+  document.getElementById("ed-save").onclick = async () => {
+    const contract = buildContract();
+    if (!contract) return;
+    const btn = document.getElementById("ed-save");
+    btn.disabled = true;
+    let r;
+    if (guid) {
+      r = await api("/fhir/Contract/" + guid, { method: "PUT", body: JSON.stringify(contract) });
+    } else {
+      r = await api("/fhir/Contract", { method: "POST", body: JSON.stringify(contract) });
+    }
+    btn.disabled = false;
+    if (r.ok) { toast(guid ? "Contract updated" : "Contract created"); navigate("/contracts/" + (r.json?.id || guid)); }
+    else toast(r.json?.message || r.json?.error || "Save failed", "error");
   };
+}
 
-  window.showResetPasswordModal = function(guid, username) {
-    showModal(`
-      <h2><i data-lucide="key" class="icon-inline"></i> Reset Password</h2>
-      <p style="color:var(--pdhc-slate);font-size:0.875rem;margin-bottom:var(--sp-base)">User: <strong>${esc(username)}</strong></p>
-      <div class="form-group"><label for="mrp-pass">New Password</label><input id="mrp-pass" type="password"/></div>
-      <div class="btn-group">
-        <button class="btn btn-primary" id="mrp-save"><i data-lucide="check" class="icon-inline"></i> Reset Password</button>
-        <button class="btn" onclick="closeModals()">Cancel</button>
-      </div>
-    `);
-    document.getElementById("mrp-save").onclick = async () => {
-      const password = document.getElementById("mrp-pass").value;
-      if (!password) { toast("Enter a password", "error"); return; }
-      const r = await api("/admin/users/" + guid + "/reset-password", { method: "POST", body: JSON.stringify({ password }) });
-      if (r.ok) { toast("Password reset"); closeModals(); }
-      else toast(r.json?.message || "Failed", "error");
-    };
-  };
+function getPartyRef(contract, roleCode) {
+  if (!contract.party) return null;
+  const p = contract.party.find(p => p.role?.[0]?.coding?.[0]?.code === roleCode);
+  if (!p?.reference?.[0]?.reference) return null;
+  return p.reference[0].reference.split("/").pop();
+}
 
-  // ──────────────────────────────────────────
-  // Actions
-  // ──────────────────────────────────────────
-  window.deleteContract = async function(guid) {
-    if (!confirm("Delete this contract? This cannot be undone.")) return;
-    const r = await api("/fhir/Contract/" + guid, { method: "DELETE" });
-    if (r.ok || r.status === 204) { toast("Contract deleted"); navigate("/contracts"); }
-    else toast(r.json?.message || "Delete failed", "error");
-  };
+function buildContract() {
+  const $ = id => document.getElementById(id)?.value?.trim() || "";
+  const status = $("ed-status");
+  if (!status) { toast("Status is required", "error"); return null; }
 
-  window.toggleUserRole = async function(guid, currentRole) {
-    const newRole = currentRole === "admin" ? "reader" : "admin";
-    const r = await api("/admin/users/" + guid, { method: "PUT", body: JSON.stringify({ role: newRole }) });
-    if (r.ok) { toast("Role updated to " + newRole); loadUsers(); }
-    else toast(r.json?.message || "Failed", "error");
-  };
+  const contract = { resourceType: "Contract", status };
 
-  window.toggleUserActive = async function(guid, isActive) {
-    const r = await api("/admin/users/" + guid, { method: "PUT", body: JSON.stringify({ is_active: !isActive }) });
-    if (r.ok) { toast(isActive ? "User deactivated" : "User activated"); loadUsers(); }
-    else toast(r.json?.message || "Failed", "error");
-  };
+  const title = $("ed-title"); if (title) contract.title = title;
+  const name = $("ed-name"); if (name) contract.name = name;
 
-  // ──────────────────────────────────────────
-  // Data loaders
-  // ──────────────────────────────────────────
-  async function loadContracts() {
+  const start = $("ed-start"), end = $("ed-end");
+  if (start || end) {
+    contract.period = {};
+    if (start) contract.period.start = start + "T00:00:00Z";
+    if (end) contract.period.end = end + "T00:00:00Z";
+  }
+
+  const issued = $("ed-issued");
+  if (issued) contract.issued = issued + "T00:00:00Z";
+
+  // Party
+  const payerGuid = $("ed-payer"), provGuid = $("ed-provider");
+  const parties = [];
+  if (payerGuid) {
+    const org = state.organisations.find(o => o.organisation_guid === payerGuid);
+    parties.push({
+      role: [{ coding: [{ system: "http://hl7.org/fhir/contract-party-role", code: "payer", display: "Payer" }] }],
+      reference: [{ reference: "Organization/" + payerGuid, display: org ? org.name : "" }]
+    });
+  }
+  if (provGuid) {
+    const org = state.organisations.find(o => o.organisation_guid === provGuid);
+    parties.push({
+      role: [{ coding: [{ system: "http://hl7.org/fhir/contract-party-role", code: "provider", display: "Provider" }] }],
+      reference: [{ reference: "Organization/" + provGuid, display: org ? org.name : "" }]
+    });
+  }
+  if (parties.length) contract.party = parties;
+
+  // Topic
+  const pdId = $("ed-plandef");
+  if (pdId) {
+    const pd = state.planDefinitions.find(p => (p.id || p.fhir_id) === pdId);
+    contract.topic = [{ reference: "PlanDefinition/" + pdId, display: pd ? (pd.title || pd.name || pdId) : "" }];
+  }
+
+  return contract;
+}
+
+// ──────────────────────────────────────────
+// Delete
+// ──────────────────────────────────────────
+async function deleteContract(guid) {
+  if (!confirm("Delete this contract?")) return;
+  const r = await api("/fhir/Contract/" + guid, { method: "DELETE" });
+  if (r.ok || r.status === 204) { toast("Contract deleted"); navigate("/contracts"); }
+  else toast(r.json?.error || "Delete failed", "error");
+}
+
+// ──────────────────────────────────────────
+// Users
+// ──────────────────────────────────────────
+function renderUsers() {
+  return `<div class="page-header"><h1>Users</h1><button class="btn btn-primary" id="add-user-btn"><i data-lucide="user-plus"></i> Add User</button></div>
+    <div class="card"><div id="users-table"><div class="empty">Loading...</div></div></div>
+    <div id="user-modal"></div>`;
+}
+
+function renderUsersTable(users) {
+  const el = document.getElementById("users-table");
+  if (!el) return;
+  if (!users.length) { el.innerHTML = '<div class="empty">No users</div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Username</th><th>Role</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+    <tbody>${users.map(u => `<tr>
+      <td><strong>${esc(u.username)}</strong></td>
+      <td><span class="badge badge-${u.role === 'admin' ? 'info' : 'success'}">${u.role}</span></td>
+      <td>${u.is_active ? '<span class="badge badge-success">active</span>' : '<span class="badge badge-danger">inactive</span>'}</td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="toggleRole('${u.guid}','${u.role}')">Toggle role</button>
+        <button class="btn btn-sm btn-secondary" onclick="resetPw('${u.guid}')">Reset pw</button>
+      </td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+// ──────────────────────────────────────────
+// Docs page
+// ──────────────────────────────────────────
+function renderDocs() {
+  const docs = [
+    { icon: "settings", title: "Operator Manual", file: "operator-manual.md", desc: "Start/stop, backup/restore, troubleshoot." },
+    { icon: "shield", title: "Admin Manual", file: "admin-manual.md", desc: "Auth, user lifecycle, contract CRUD." },
+    { icon: "code", title: "API Reference", file: "api.md", desc: "Endpoint reference with examples." },
+    { icon: "boxes", title: "Architecture", file: "architecture.md", desc: "Container topology, data model, security." },
+  ];
+  const runbooks = [
+    { icon: "key-round", title: "Credential Rotation", file: "runbooks/credential-rotation.md", desc: "Rotate keys and passwords." },
+    { icon: "alert-triangle", title: "Incident Response", file: "runbooks/incident-response.md", desc: "Triage and recovery." },
+    { icon: "arrow-up-circle", title: "Upgrade Procedure", file: "runbooks/upgrade-procedure.md", desc: "Upgrade steps and rollback." },
+  ];
+  function card(d) {
+    return `<div class="card"><div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem"><i data-lucide="${d.icon}"></i><h3 style="margin:0">${d.title}</h3></div>
+      <p class="text-muted" style="margin-bottom:0.5rem">${d.desc}</p>
+      <a href="/docs/${d.file}" download class="btn btn-sm btn-secondary"><i data-lucide="download"></i> Download</a></div>`;
+  }
+  return `<h1>Documentation</h1><p class="text-muted mb-1">Download manuals and runbooks as Markdown.</p>
+    <h2>Manuals</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.75rem;margin-bottom:1rem">${docs.map(card).join("")}</div>
+    <h2>Runbooks</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.75rem">${runbooks.map(card).join("")}</div>`;
+}
+
+// ──────────────────────────────────────────
+// API Reference
+// ──────────────────────────────────────────
+function renderApiRef() {
+  const eps = [
+    { m: "GET", p: "/health", a: "None", r: "—", d: "Health check" },
+    { m: "POST", p: "/auth/login", a: "None", r: "—", d: "Authenticate" },
+    { m: "GET", p: "/fhir/metadata", a: "None", r: "100/hr", d: "CapabilityStatement" },
+    { m: "GET", p: "/fhir/Contract", a: "None", r: "100/hr", d: "List contracts" },
+    { m: "GET", p: "/fhir/Contract/{id}", a: "None", r: "100/hr", d: "Read contract" },
+    { m: "POST", p: "/fhir/Contract", a: "Admin", r: "—", d: "Create contract" },
+    { m: "PUT", p: "/fhir/Contract/{id}", a: "Admin", r: "—", d: "Update contract" },
+    { m: "DELETE", p: "/fhir/Contract/{id}", a: "Admin", r: "—", d: "Delete contract" },
+    { m: "GET", p: "/admin/users", a: "Admin", r: "—", d: "List users" },
+    { m: "POST", p: "/admin/users", a: "Admin", r: "—", d: "Create user" },
+    { m: "PUT", p: "/admin/users/{id}", a: "Admin", r: "—", d: "Update user" },
+    { m: "POST", p: "/admin/users/{id}/reset-password", a: "Admin", r: "—", d: "Reset password" },
+  ];
+  const mc = { GET: "var(--success)", POST: "var(--primary)", PUT: "var(--warning)", DELETE: "var(--danger)" };
+  return `<h1>API Reference</h1>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Rate</th><th>Description</th></tr></thead>
+      <tbody>${eps.map(e => `<tr><td><strong class="mono" style="color:${mc[e.m]}">${e.m}</strong></td><td class="mono">${esc(e.p)}</td><td><span class="badge ${e.a === 'Admin' ? 'badge-warning' : 'badge-success'}">${e.a}</span></td><td>${e.r}</td><td>${e.d}</td></tr>`).join("")}</tbody>
+    </table></div></div>
+    <div class="card" style="margin-top:0.75rem"><h2>Authentication</h2>
+      <p class="text-muted">POST <code>/auth/login</code> with <code>{"username","password"}</code> → returns <code>{"access_token","role"}</code>. Include as <code>Authorization: Bearer &lt;token&gt;</code>. Tokens expire after 8 hours.</p>
+    </div>`;
+}
+
+// ──────────────────────────────────────────
+// Page bindings
+// ──────────────────────────────────────────
+async function bindPage(route) {
+  if (route === "/" || route === "/dashboard") {
+    const [cr, ur, hr] = await Promise.all([api("/fhir/Contract"), api("/admin/users"), api("/health")]);
+    if (cr.ok) {
+      state.contracts = (cr.json?.entry || []).map(e => e.resource);
+      const el = document.getElementById("s-ct"); if (el) el.textContent = state.contracts.length;
+      const recent = document.getElementById("dash-recent");
+      if (recent) { if (state.contracts.length) { recent.innerHTML = ""; const wrap = document.createElement("div"); wrap.id = "ct-table"; recent.appendChild(wrap); renderTable(state.contracts.slice(0, 5)); } else recent.innerHTML = '<div class="empty">No contracts yet</div>'; }
+    }
+    if (ur.ok) { state.users = ur.json; const el = document.getElementById("s-us"); if (el) el.textContent = ur.json.length; }
+    if (hr.ok) { const el = document.getElementById("s-api"); if (el) el.textContent = "OK"; }
+  }
+  else if (route === "/contracts") {
     const r = await api("/fhir/Contract");
-    if (!r.ok) return [];
-    state.contracts = (r.json?.entry || []).map(e => e.resource);
-    return state.contracts;
+    if (r.ok) { state.contracts = (r.json?.entry || []).map(e => e.resource); renderTable(state.contracts); }
+    const si = document.getElementById("search");
+    if (si) { let t; si.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { const q = si.value.toLowerCase(); renderTable(state.contracts.filter(c => JSON.stringify(c).toLowerCase().includes(q))); }, 200); }); }
   }
-
-  async function loadUsers() {
+  else if (route === "/contracts/new") { await bindEditor(null); }
+  else if (route.startsWith("/contracts/edit/")) { await bindEditor(route.split("/contracts/edit/")[1]); }
+  else if (route.startsWith("/contracts/")) {
+    const guid = route.split("/contracts/")[1];
+    const r = await api("/fhir/Contract/" + guid);
+    const el = document.getElementById("detail-card");
+    if (!el) return;
+    el.innerHTML = r.ok ? renderDetailContent(r.json) : '<div class="empty">Contract not found</div>';
+    icons();
+  }
+  else if (route === "/users") {
     const r = await api("/admin/users");
-    if (!r.ok) return [];
-    state.users = r.json || [];
-    renderUsersTable(state.users);
-    return state.users;
+    if (r.ok) { state.users = r.json; renderUsersTable(r.json); }
+    document.getElementById("add-user-btn").onclick = () => showAddUserModal();
   }
+}
 
-  // ──────────────────────────────────────────
-  // Page binder
-  // ──────────────────────────────────────────
-  async function bindPage(route) {
-    if (route === "/" || route === "/dashboard") {
-      const [contracts, health] = await Promise.all([loadContracts(), api("/health")]);
-      const statC = document.getElementById("stat-contracts");
-      const statA = document.getElementById("stat-api");
-      if (statC) statC.textContent = contracts.length;
-      if (statA) {
-        statA.textContent = health.ok ? "OK" : "DOWN";
-        if (!health.ok) statA.style.color = "var(--pdhc-danger)";
-      }
-      if (isAdmin()) {
-        const users = await loadUsers();
-        const statU = document.getElementById("stat-users");
-        if (statU) statU.textContent = users.length;
-      }
-      const recentEl = document.getElementById("recent-contracts");
-      if (recentEl) {
-        const recent = contracts.slice(0, 5);
-        if (!recent.length) {
-          recentEl.innerHTML = '<div class="empty">No contracts yet</div>';
-        } else {
-          recentEl.innerHTML = `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Status</th><th>Period</th></tr></thead><tbody>
-            ${recent.map(c => {
-              const id = c.id || "—";
-              const shortId = id.length > 8 ? id.slice(0, 8) + "..." : id;
-              const status = c.status || "draft";
-              return `<tr class="clickable" onclick="navigate('/contracts/${id}')">
-                <td class="mono">${esc(shortId)}</td>
-                <td><span class="badge badge-${status}">${esc(status)}</span></td>
-                <td style="font-size:0.8125rem;color:var(--pdhc-slate)">${c.period?.start?.slice(0,10) || '—'} — ${c.period?.end?.slice(0,10) || '—'}</td>
-              </tr>`;
-            }).join("")}
-          </tbody></table></div>`;
-        }
-        reinitIcons();
-      }
-    }
+// ──────────────────────────────────────────
+// User management helpers
+// ──────────────────────────────────────────
+function showAddUserModal() {
+  document.getElementById("user-modal").innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)this.remove()">
+    <div class="modal"><h2>Add User</h2>
+      <div class="form-group"><label>Username</label><input id="nu-user" class="form-control"></div>
+      <div class="form-group"><label>Password</label><input id="nu-pass" class="form-control" type="password"></div>
+      <div class="form-group"><label>Role</label><select id="nu-role" class="form-control"><option value="reader">reader</option><option value="admin">admin</option></select></div>
+      <div class="btn-group"><button class="btn btn-primary" id="nu-save">Create</button><button class="btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">Cancel</button></div>
+    </div></div>`;
+  document.getElementById("nu-save").onclick = async () => {
+    const u = document.getElementById("nu-user").value, p = document.getElementById("nu-pass").value, role = document.getElementById("nu-role").value;
+    if (!u || !p) { toast("Username and password required", "error"); return; }
+    const r = await api("/admin/users", { method: "POST", body: JSON.stringify({ username: u, password: p, role }) });
+    if (r.ok) { toast("User created"); document.querySelector(".modal-overlay").remove(); bindPage("/users"); }
+    else toast(r.json?.message || "Failed", "error");
+  };
+}
 
-    else if (route === "/contracts") {
-      const contracts = await loadContracts();
-      renderContractsTable(contracts);
-      const searchInput = document.getElementById("search-input");
-      if (searchInput) {
-        let debounce;
-        searchInput.addEventListener("input", () => {
-          clearTimeout(debounce);
-          debounce = setTimeout(() => {
-            const q = searchInput.value.toLowerCase();
-            renderContractsTable(state.contracts.filter(c => JSON.stringify(c).toLowerCase().includes(q)));
-          }, 200);
-        });
-      }
-    }
+async function toggleRole(guid, currentRole) {
+  const newRole = currentRole === "admin" ? "reader" : "admin";
+  const r = await api("/admin/users/" + guid, { method: "PUT", body: JSON.stringify({ role: newRole }) });
+  if (r.ok) { toast("Role updated to " + newRole); bindPage("/users"); }
+  else toast(r.json?.message || "Failed", "error");
+}
 
-    else if (route.startsWith("/contracts/edit/")) {
-      const guid = route.split("/contracts/edit/")[1];
-      const r = await api("/fhir/Contract/" + guid);
-      if (!r.ok) { toast("Contract not found", "error"); navigate("/contracts"); return; }
-      const contract = r.json;
-      const statusSel = document.getElementById("ed-status");
-      const startIn = document.getElementById("ed-start");
-      const endIn = document.getElementById("ed-end");
-      const narrIn = document.getElementById("ed-narrative");
-      const jsonTa = document.getElementById("ed-json");
-      if (statusSel && contract.status) statusSel.value = contract.status;
-      if (startIn && contract.period?.start) startIn.value = contract.period.start.slice(0, 10);
-      if (endIn && contract.period?.end) endIn.value = contract.period.end.slice(0, 10);
-      if (narrIn && contract.text?.div) narrIn.value = contract.text.div.replace(/<[^>]*>/g, "");
-      if (jsonTa) jsonTa.value = JSON.stringify(contract, null, 2);
+async function resetPw(guid) {
+  const pw = prompt("New password:");
+  if (!pw) return;
+  const r = await api("/admin/users/" + guid + "/reset-password", { method: "POST", body: JSON.stringify({ password: pw }) });
+  if (r.ok) toast("Password reset");
+  else toast(r.json?.message || "Failed", "error");
+}
 
-      function syncFormToJson() {
-        try {
-          const obj = JSON.parse(jsonTa.value);
-          obj.status = statusSel.value;
-          obj.period = obj.period || {};
-          if (startIn.value) obj.period.start = startIn.value + "T00:00:00Z";
-          if (endIn.value) obj.period.end = endIn.value + "T00:00:00Z";
-          if (narrIn.value) obj.text = { status: "generated", div: "<div>" + esc(narrIn.value) + "</div>" };
-          jsonTa.value = JSON.stringify(obj, null, 2);
-        } catch {}
-      }
-      [statusSel, startIn, endIn, narrIn].forEach(el => { if (el) el.addEventListener("change", syncFormToJson); });
-
-      document.getElementById("ed-save").onclick = async () => {
-        let payload;
-        try { payload = JSON.parse(jsonTa.value); } catch { toast("Invalid JSON", "error"); return; }
-        const r = await api("/fhir/Contract/" + guid, { method: "PUT", body: JSON.stringify(payload) });
-        if (r.ok) { toast("Contract updated"); navigate("/contracts/" + guid); }
-        else toast(r.json?.message || "Save failed", "error");
-      };
-    }
-
-    else if (route === "/contracts/new") {
-      const jsonTa = document.getElementById("ed-json");
-      const statusSel = document.getElementById("ed-status");
-      const startIn = document.getElementById("ed-start");
-      const endIn = document.getElementById("ed-end");
-      const narrIn = document.getElementById("ed-narrative");
-      const today = new Date().toISOString().slice(0, 10);
-      const defaultContract = { resourceType: "Contract", status: "draft", period: { start: today + "T00:00:00Z" }, text: { status: "generated", div: "<div></div>" } };
-      if (jsonTa) jsonTa.value = JSON.stringify(defaultContract, null, 2);
-      if (startIn) startIn.value = today;
-
-      function syncFormToJson() {
-        try {
-          const obj = JSON.parse(jsonTa.value);
-          obj.status = statusSel.value;
-          obj.period = obj.period || {};
-          if (startIn.value) obj.period.start = startIn.value + "T00:00:00Z";
-          if (endIn.value) obj.period.end = endIn.value + "T00:00:00Z";
-          if (narrIn.value) obj.text = { status: "generated", div: "<div>" + esc(narrIn.value) + "</div>" };
-          jsonTa.value = JSON.stringify(obj, null, 2);
-        } catch {}
-      }
-      [statusSel, startIn, endIn, narrIn].forEach(el => { if (el) el.addEventListener("change", syncFormToJson); });
-
-      document.getElementById("ed-save").onclick = async () => {
-        let payload;
-        try { payload = JSON.parse(jsonTa.value); } catch { toast("Invalid JSON", "error"); return; }
-        const r = await api("/fhir/Contract", { method: "POST", body: JSON.stringify(payload) });
-        if (r.ok) { toast("Contract created"); navigate("/contracts/" + r.json.id); }
-        else toast(r.json?.message || "Create failed", "error");
-      };
-    }
-
-    else if (route.startsWith("/contracts/") && !route.includes("edit") && !route.includes("new")) {
-      const guid = route.split("/contracts/")[1];
-      const r = await api("/fhir/Contract/" + guid);
-      const el = document.getElementById("contract-detail");
-      if (!el) return;
-      if (r.ok) {
-        el.innerHTML = `<div class="json-view">${esc(JSON.stringify(r.json, null, 2))}</div>`;
-      } else {
-        el.innerHTML = '<div class="empty">Contract not found</div>';
-      }
-    }
-
-    else if (route === "/users") {
-      await loadUsers();
-      const btn = document.getElementById("create-user-btn");
-      if (btn) btn.onclick = () => showCreateUserModal();
-    }
-  }
-
-  // ──────────────────────────────────────────
-  // Util
-  // ──────────────────────────────────────────
-  function esc(str) {
-    if (!str) return "";
-    return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  }
-
-  // ──────────────────────────────────────────
-  // Boot
-  // ──────────────────────────────────────────
-  if (!state.route || state.route === "/") {
-    state.route = isLoggedIn() ? "/dashboard" : "/contracts";
-    location.hash = state.route;
-  }
-  render();
-  </script>
+// ──────────────────────────────────────────
+// Boot
+// ──────────────────────────────────────────
+render();
+</script>
 </body>
 </html>

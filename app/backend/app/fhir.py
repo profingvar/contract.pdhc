@@ -163,5 +163,52 @@ def ensure_contract_shape(resource: dict[str, Any]) -> dict[str, Any]:
                 except Exception as e:
                     raise ValueError(f"period.{k} must be ISO-8601 datetime") from e
 
+    # Optional string fields
+    for field in ("title", "name"):
+        if field in resource and not isinstance(resource[field], str):
+            raise ValueError(f"{field} must be a string")
+
+    # Issued datetime (optional)
+    if "issued" in resource and resource["issued"] is not None:
+        try:
+            datetime.fromisoformat(resource["issued"].replace("Z", "+00:00"))
+        except Exception as e:
+            raise ValueError("issued must be ISO-8601 datetime") from e
+
+    # Party array (payer/provider organisations)
+    _REF_PATTERN = re.compile(r"^[A-Z][a-zA-Z]+/[^\s]+$")
+    if "party" in resource:
+        parties = resource["party"]
+        if not isinstance(parties, list):
+            raise ValueError("party must be an array")
+        for i, p in enumerate(parties):
+            if not isinstance(p, dict):
+                raise ValueError(f"party[{i}] must be an object")
+            # role is required: array of CodeableConcept
+            if "role" not in p or not isinstance(p["role"], list) or not p["role"]:
+                raise ValueError(f"party[{i}].role must be a non-empty array of CodeableConcept")
+            for j, role in enumerate(p["role"]):
+                if not isinstance(role, dict) or "coding" not in role:
+                    raise ValueError(f"party[{i}].role[{j}] must have a 'coding' array")
+            # reference is required: array of Reference
+            if "reference" not in p or not isinstance(p["reference"], list) or not p["reference"]:
+                raise ValueError(f"party[{i}].reference must be a non-empty array of Reference")
+            for j, ref in enumerate(p["reference"]):
+                if not isinstance(ref, dict) or "reference" not in ref:
+                    raise ValueError(f"party[{i}].reference[{j}] must have a 'reference' field")
+                if not _REF_PATTERN.match(ref["reference"]):
+                    raise ValueError(f"party[{i}].reference[{j}].reference must match 'ResourceType/id' format")
+
+    # Topic array (PlanDefinition references for work areas)
+    if "topic" in resource:
+        topics = resource["topic"]
+        if not isinstance(topics, list):
+            raise ValueError("topic must be an array of references")
+        for i, ref in enumerate(topics):
+            if not isinstance(ref, dict) or "reference" not in ref:
+                raise ValueError(f"topic[{i}] must be an object with a 'reference' field")
+            if not _REF_PATTERN.match(ref["reference"]):
+                raise ValueError(f"topic[{i}].reference must match 'ResourceType/id' format")
+
     return resource
 
