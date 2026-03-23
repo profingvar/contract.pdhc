@@ -1,0 +1,4 @@
+Focus (debugging/iteration):
+
+- Not set yet. This file will be used later to define the current focus area and extend `readme.md` during debugging phases.
+

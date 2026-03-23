@@ -1,0 +1,11 @@
+Flask
+flask-cors
+flask-jwt-extended
+flask-limiter
+psycopg[binary]
+SQLAlchemy
+alembic
+gunicorn
+pydantic
+pytest
+requests

@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: contracts
+      POSTGRES_USER: contracts
+      POSTGRES_PASSWORD: contracts
+      # Local-dev only: allow container-network connections without SSL.
+      # Harden later for server deployment (SCRAM + TLS).
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "9020:5432"
+    volumes:
+      - contracts_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contracts -d contracts"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://contracts:contracts@db:5432/contracts
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}
+      READ_RATE_LIMIT: "100 per hour"
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-change-me}
+      DB_WAIT_TIMEOUT_S: "30"
+      CORS_ORIGINS: "*"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "9021:9021"
+    restart: unless-stopped
+
+  web:
+    image: nginx:alpine
+    depends_on:
+      - api
+    volumes:
+      - ./web/dist:/usr/share/nginx/html:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docs:/usr/share/nginx/docs:ro
+    ports:
+      - "9022:80"
+
+volumes:
+  contracts_pgdata:

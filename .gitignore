@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+app/.venv/
+*.egg-info/
+
+# Environment / secrets
+.env
+*.env.local
+
+# Docker
+app/backend/app/__pycache__/
+app/backend/tests/__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test results (local artifacts)
+results/
+
+# Database backups (local only)
+db_backups/
+
+# Docker volumes
+*.pgdata

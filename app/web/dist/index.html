@@ -1,0 +1,1383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Contracts — PDHC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    /* ───────────────────────────────────────────
+       PDHC Design System Tokens
+       ─────────────────────────────────────────── */
+    :root {
+      --pdhc-navy: #1a2332;
+      --pdhc-teal: #0d9488;
+      --pdhc-teal-dark: #0a7a70;
+      --pdhc-teal-light: #e6f7f5;
+      --pdhc-slate: #475569;
+      --pdhc-slate-light: #94a3b8;
+      --pdhc-bg: #f8fafc;
+      --pdhc-surface: #ffffff;
+      --pdhc-border: #e2e8f0;
+      --pdhc-success: #059669;
+      --pdhc-warning: #d97706;
+      --pdhc-danger: #dc2626;
+      --pdhc-info: #2563eb;
+      /* spacing */
+      --sp-xs: 0.25rem;
+      --sp-sm: 0.5rem;
+      --sp-md: 0.75rem;
+      --sp-base: 1rem;
+      --sp-lg: 1.5rem;
+      --sp-xl: 2rem;
+      --sp-2xl: 3rem;
+      --sp-3xl: 4rem;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+      color: var(--pdhc-navy);
+      background: var(--pdhc-bg);
+      min-height: 100vh;
+    }
+
+    a { color: var(--pdhc-teal); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Focus ── */
+    :focus-visible {
+      outline: 2px solid var(--pdhc-teal);
+      outline-offset: 2px;
+    }
+
+    /* ── Respect reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+
+    /* ───────────────────────────────────────────
+       Navbar — fixed top, navy bg
+       ─────────────────────────────────────────── */
+    .navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 3.5rem;
+      background: var(--pdhc-navy);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--sp-lg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .navbar-brand span { opacity: 0.6; font-weight: 400; font-size: 0.8125rem; }
+    .navbar-links {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-xs);
+      list-style: none;
+    }
+    .navbar-links a {
+      color: rgba(255,255,255,0.75);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      padding: var(--sp-sm) var(--sp-md);
+      border-radius: 0.375rem;
+      transition: color 150ms ease, background 150ms ease;
+      text-decoration: none;
+      position: relative;
+    }
+    .navbar-links a:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .navbar-links a.active {
+      color: #fff;
+      border-bottom: 2px solid var(--pdhc-teal);
+      border-radius: 0;
+      padding-bottom: calc(var(--sp-sm) - 2px);
+    }
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-md);
+      font-size: 0.8125rem;
+      color: rgba(255,255,255,0.7);
+    }
+    .navbar-user .role-tag {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      background: rgba(13,148,136,0.3);
+      color: var(--pdhc-teal-light);
+      padding: 2px 8px;
+      border-radius: 9999px;
+    }
+    .navbar-user button {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.7);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+    .navbar-user button:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+
+    /* Mobile hamburger */
+    .navbar-toggle { display: none; background: none; border: none; color: #fff; cursor: pointer; }
+    @media (max-width: 768px) {
+      .navbar-toggle { display: block; }
+      .navbar-links { display: none; position: absolute; top: 3.5rem; right: 0; background: var(--pdhc-navy); flex-direction: column; padding: var(--sp-base); border-radius: 0 0 0 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+      .navbar-links.open { display: flex; }
+      .navbar-links a.active { border-bottom: none; background: rgba(13,148,136,0.2); border-radius: 0.375rem; padding: var(--sp-sm) var(--sp-md); }
+    }
+
+    /* ───────────────────────────────────────────
+       Page layout
+       ─────────────────────────────────────────── */
+    .page { max-width: 72rem; margin: 0 auto; padding: calc(3.5rem + var(--sp-xl)) var(--sp-lg) var(--sp-xl); }
+    .page-title { font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: var(--pdhc-navy); margin-bottom: var(--sp-lg); }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-lg); flex-wrap: wrap; gap: var(--sp-base); }
+    .page-header .page-title { margin-bottom: 0; }
+
+    /* ───────────────────────────────────────────
+       Cards
+       ─────────────────────────────────────────── */
+    .card {
+      background: var(--pdhc-surface);
+      border: 1px solid var(--pdhc-border);
+      border-radius: 0.75rem;
+      padding: var(--sp-lg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .card + .card { margin-top: var(--sp-base); }
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--pdhc-navy);
+      margin-bottom: var(--sp-base);
+    }
+
+    /* ───────────────────────────────────────────
+       Stats row
+       ─────────────────────────────────────────── */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-base); margin-bottom: var(--sp-lg); }
+    .stat-card {
+      background: var(--pdhc-surface);
+      border: 1px solid var(--pdhc-border);
+      border-radius: 0.75rem;
+      padding: var(--sp-lg);
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .stat-card .num {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--pdhc-teal);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .stat-card .label {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--pdhc-slate);
+      margin-top: var(--sp-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ───────────────────────────────────────────
+       Buttons
+       ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      min-height: 2.5rem;
+      padding: var(--sp-sm) var(--sp-base);
+      border-radius: 0.5rem;
+      border: 1px solid var(--pdhc-border);
+      background: var(--pdhc-surface);
+      color: var(--pdhc-navy);
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 150ms ease;
+      text-decoration: none;
+    }
+    .btn:hover { background: var(--pdhc-bg); }
+    .btn-primary {
+      background: var(--pdhc-teal);
+      border-color: var(--pdhc-teal);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--pdhc-teal-dark); border-color: var(--pdhc-teal-dark); }
+    .btn-secondary {
+      background: var(--pdhc-surface);
+      border-color: var(--pdhc-teal);
+      color: var(--pdhc-teal);
+    }
+    .btn-secondary:hover { background: var(--pdhc-teal-light); }
+    .btn-danger {
+      background: var(--pdhc-danger);
+      border-color: var(--pdhc-danger);
+      color: #fff;
+    }
+    .btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+    .btn-ghost {
+      background: none;
+      border: none;
+      color: var(--pdhc-teal);
+      padding: var(--sp-sm);
+    }
+    .btn-ghost:hover { text-decoration: underline; }
+    .btn-sm { min-height: 2rem; padding: var(--sp-xs) var(--sp-sm); font-size: 0.8125rem; }
+    .btn[disabled], .btn.loading { opacity: 0.7; cursor: not-allowed; }
+    .btn.loading { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:0.7}50%{opacity:0.5} }
+    .btn-group { display: flex; gap: var(--sp-sm); flex-wrap: wrap; }
+
+    /* ───────────────────────────────────────────
+       Forms
+       ─────────────────────────────────────────── */
+    .form-group { margin-bottom: var(--sp-base); }
+    .form-group label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--pdhc-slate);
+      margin-bottom: var(--sp-xs);
+      line-height: 1.4;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: var(--sp-md);
+      border: 1px solid var(--pdhc-border);
+      border-radius: 0.5rem;
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 0.9375rem;
+      color: var(--pdhc-navy);
+      background: var(--pdhc-surface);
+      transition: border-color 150ms ease;
+      outline: none;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--pdhc-teal);
+      box-shadow: 0 0 0 2px rgba(13,148,136,0.15);
+    }
+    .form-group input::placeholder { color: var(--pdhc-slate-light); }
+    .form-group textarea {
+      min-height: 200px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .form-group select { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.5rem; }
+    .form-group .error-msg { font-size: 0.8125rem; color: var(--pdhc-danger); margin-top: var(--sp-xs); }
+    .form-group.has-error input,
+    .form-group.has-error select { border-color: var(--pdhc-danger); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-base); }
+    @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+
+    /* ───────────────────────────────────────────
+       Tables
+       ─────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+    thead th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--pdhc-slate);
+      background: var(--pdhc-bg);
+      padding: var(--sp-md) var(--sp-base);
+      border-bottom: 1px solid var(--pdhc-border);
+    }
+    tbody td {
+      padding: var(--sp-md) var(--sp-base);
+      border-bottom: 1px solid var(--pdhc-border);
+      vertical-align: middle;
+    }
+    tbody tr:nth-child(even) { background: var(--pdhc-bg); }
+    tbody tr:hover { background: var(--pdhc-teal-light); }
+    tbody tr.clickable { cursor: pointer; }
+
+    /* ───────────────────────────────────────────
+       Badges
+       ─────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-xs);
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-approved, .badge-active, .badge-executed { background: #dcfce7; color: #166534; }
+    .badge-pending, .badge-draft { background: #fef3c7; color: #92400e; }
+    .badge-rejected, .badge-inactive, .badge-cancelled, .badge-entered-in-error { background: #fee2e2; color: #991b1b; }
+    .badge-disputed { background: #fef3c7; color: #92400e; }
+    .badge-info { background: #dbeafe; color: #1e40af; }
+    .badge-admin { background: var(--pdhc-teal-light); color: var(--pdhc-teal-dark); }
+    .badge-reader { background: #dbeafe; color: #1e40af; }
+
+    /* ───────────────────────────────────────────
+       Toasts (flash messages)
+       ─────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      top: calc(3.5rem + var(--sp-base));
+      right: var(--sp-base);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-sm);
+    }
+    .toast {
+      padding: var(--sp-md) var(--sp-lg);
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      max-width: 380px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      animation: toastSlide 200ms ease;
+    }
+    .toast[role="status"] { /* aria-live polite by default */ }
+    .toast.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .toast.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    @keyframes toastSlide { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ───────────────────────────────────────────
+       Modal
+       ─────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,35,50,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 300;
+      animation: fadeIn 150ms ease;
+    }
+    .modal {
+      background: var(--pdhc-surface);
+      border: 1px solid var(--pdhc-border);
+      border-radius: 0.75rem;
+      padding: var(--sp-lg);
+      min-width: 380px;
+      max-width: 480px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .modal h2 { font-size: 1.25rem; font-weight: 700; color: var(--pdhc-navy); margin-bottom: var(--sp-base); }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* ───────────────────────────────────────────
+       Search bar
+       ─────────────────────────────────────────── */
+    .search-bar {
+      display: flex;
+      gap: var(--sp-sm);
+      margin-bottom: var(--sp-base);
+    }
+    .search-bar input {
+      flex: 1;
+      padding: var(--sp-md) var(--sp-base);
+      border: 1px solid var(--pdhc-border);
+      border-radius: 0.5rem;
+      font-size: 0.9375rem;
+      color: var(--pdhc-navy);
+      background: var(--pdhc-surface);
+      outline: none;
+      transition: border-color 150ms ease;
+    }
+    .search-bar input:focus { border-color: var(--pdhc-teal); box-shadow: 0 0 0 2px rgba(13,148,136,0.15); }
+
+    /* ───────────────────────────────────────────
+       Detail / JSON view
+       ─────────────────────────────────────────── */
+    .detail-header {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-md);
+      margin-bottom: var(--sp-lg);
+      flex-wrap: wrap;
+    }
+    .json-view {
+      background: var(--pdhc-bg);
+      border: 1px solid var(--pdhc-border);
+      border-radius: 0.5rem;
+      padding: var(--sp-lg);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 500px;
+      overflow-y: auto;
+      color: var(--pdhc-navy);
+    }
+
+    /* ───────────────────────────────────────────
+       Login
+       ─────────────────────────────────────────── */
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: var(--sp-lg);
+    }
+    .login-card { width: 380px; }
+    .login-card h1 {
+      text-align: center;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--pdhc-navy);
+      margin-bottom: var(--sp-xl);
+    }
+    .login-card h1 span { color: var(--pdhc-teal); font-weight: 400; font-size: 1rem; }
+
+    /* ───────────────────────────────────────────
+       Empty state
+       ─────────────────────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: var(--sp-2xl);
+      color: var(--pdhc-slate);
+      font-size: 0.9375rem;
+    }
+
+    /* ───────────────────────────────────────────
+       Monospace helper
+       ─────────────────────────────────────────── */
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; }
+
+    /* ───────────────────────────────────────────
+       Rate limit notice
+       ─────────────────────────────────────────── */
+    .rate-notice {
+      font-size: 0.75rem;
+      color: var(--pdhc-slate-light);
+      text-align: center;
+      padding: var(--sp-sm);
+    }
+
+    /* Lucide icon sizing */
+    .icon-inline { width: 1.25rem; height: 1.25rem; stroke-width: 1.5; vertical-align: -3px; }
+    .icon-btn { width: 1.5rem; height: 1.5rem; stroke-width: 1.5; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="toast-container" id="toasts" aria-live="polite"></div>
+
+  <script>
+  // ──────────────────────────────────────────
+  // Config & State
+  // ──────────────────────────────────────────
+  const API = location.port === "9022"
+    ? location.protocol + "//" + location.hostname + ":9021"
+    : "http://localhost:9021";
+
+  const state = {
+    token: sessionStorage.getItem("token") || null,
+    role: sessionStorage.getItem("role") || null,
+    username: sessionStorage.getItem("username") || null,
+    route: location.hash.slice(1) || "/",
+    contracts: [],
+    users: [],
+  };
+
+  function saveAuth(token, role, username) {
+    state.token = token;
+    state.role = role;
+    state.username = username;
+    if (token) {
+      sessionStorage.setItem("token", token);
+      sessionStorage.setItem("role", role);
+      sessionStorage.setItem("username", username);
+    } else {
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("role");
+      sessionStorage.removeItem("username");
+    }
+  }
+
+  function isAdmin() { return state.role === "admin"; }
+  function isLoggedIn() { return !!state.token; }
+
+  // ──────────────────────────────────────────
+  // API
+  // ──────────────────────────────────────────
+  async function api(path, opts = {}) {
+    const headers = { "Content-Type": "application/fhir+json", ...(opts.headers || {}) };
+    if (state.token) headers.Authorization = "Bearer " + state.token;
+    try {
+      const res = await fetch(API + path, { ...opts, headers });
+      if (res.status === 401 && state.token) {
+        saveAuth(null, null, null);
+        navigate("/login");
+        toast("Session expired — please log in again", "error");
+        return { ok: false, status: 401, json: null };
+      }
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+      return { ok: res.ok, status: res.status, json };
+    } catch (e) {
+      toast("Network error: " + e.message, "error");
+      return { ok: false, status: 0, json: null };
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // Toast (aria-live for accessibility)
+  // ──────────────────────────────────────────
+  function toast(msg, type = "success") {
+    const el = document.createElement("div");
+    el.className = "toast " + type;
+    el.setAttribute("role", "status");
+    el.textContent = msg;
+    document.getElementById("toasts").appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+
+  // ──────────────────────────────────────────
+  // Router
+  // ──────────────────────────────────────────
+  function navigate(path) { location.hash = path; }
+  window.addEventListener("hashchange", () => {
+    state.route = location.hash.slice(1) || "/";
+    render();
+  });
+
+  // ──────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────
+  function render() {
+    const route = state.route;
+    const app = document.getElementById("app");
+
+    if (route === "/login") {
+      app.innerHTML = renderLogin();
+      bindLogin();
+      reinitIcons();
+      return;
+    }
+
+    let content = "";
+    if (!isLoggedIn()) {
+      if (route === "/" || route.startsWith("/contracts") || route === "/docs" || route === "/api") {
+        content = renderPublicContent(route);
+        app.innerHTML = renderNavbar() + `<div class="page">${content}</div>`;
+        bindPublic(route);
+        reinitIcons();
+        return;
+      }
+      navigate("/login");
+      return;
+    }
+
+    if (route === "/" || route === "/dashboard") content = renderDashboard();
+    else if (route === "/contracts") content = renderContractsList();
+    else if (route === "/contracts/new") content = renderContractEditor(null);
+    else if (route.startsWith("/contracts/edit/")) content = renderContractEditor(route.split("/contracts/edit/")[1]);
+    else if (route.startsWith("/contracts/")) content = renderContractDetail(route.split("/contracts/")[1]);
+    else if (route === "/users") content = renderUsersList();
+    else if (route === "/docs") content = renderDocsPage();
+    else if (route === "/api") content = renderApiPage();
+    else content = renderDashboard();
+
+    app.innerHTML = renderNavbar() + `<div class="page">${content}</div>`;
+    bindPage(route);
+    reinitIcons();
+  }
+
+  function reinitIcons() {
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // ──────────────────────────────────────────
+  // Navbar
+  // ──────────────────────────────────────────
+  function renderNavbar() {
+    const route = state.route;
+    const isAuth = isLoggedIn();
+    const admin = isAdmin();
+
+    let links = "";
+    if (admin) {
+      links += `<a href="#/dashboard" class="${route === '/dashboard' || route === '/' ? 'active' : ''}"><i data-lucide="layout-dashboard" class="icon-inline"></i> Dashboard</a>`;
+    }
+    links += `<a href="#/contracts" class="${route.startsWith('/contracts') ? 'active' : ''}"><i data-lucide="file-text" class="icon-inline"></i> Contracts</a>`;
+    links += `<a href="#/docs" class="${route === '/docs' ? 'active' : ''}"><i data-lucide="book-open" class="icon-inline"></i> Docs</a>`;
+    links += `<a href="#/api" class="${route === '/api' ? 'active' : ''}"><i data-lucide="code" class="icon-inline"></i> API</a>`;
+    if (admin) {
+      links += `<a href="#/users" class="${route === '/users' ? 'active' : ''}"><i data-lucide="users" class="icon-inline"></i> Users</a>`;
+    }
+
+    const userArea = isAuth
+      ? `<div class="navbar-user">
+           <span>${esc(state.username)}</span>
+           <span class="role-tag">${state.role}</span>
+           <button onclick="logout()">Logout</button>
+         </div>`
+      : `<div class="navbar-user"><a href="#/login" style="color:rgba(255,255,255,0.8)"><i data-lucide="log-in" class="icon-inline"></i> Login</a></div>`;
+
+    return `
+      <nav class="navbar" role="navigation" aria-label="Main navigation">
+        <div class="navbar-brand"><i data-lucide="heart-pulse" class="icon-btn"></i> Contracts <span>PDHC</span></div>
+        <button class="navbar-toggle" onclick="document.querySelector('.navbar-links').classList.toggle('open')" aria-label="Toggle menu"><i data-lucide="menu" class="icon-btn"></i></button>
+        <div class="navbar-links">${links}</div>
+        ${userArea}
+      </nav>`;
+  }
+
+  // ──────────────────────────────────────────
+  // Login page
+  // ──────────────────────────────────────────
+  function renderLogin() {
+    return `
+      <div class="login-container">
+        <div class="card login-card">
+          <h1>Contracts <span>PDHC</span></h1>
+          <div class="form-group">
+            <label for="login-user">Username</label>
+            <input id="login-user" autocomplete="username"/>
+          </div>
+          <div class="form-group">
+            <label for="login-pass">Password</label>
+            <input id="login-pass" type="password" autocomplete="current-password"/>
+          </div>
+          <div class="btn-group" style="flex-direction:column;gap:var(--sp-sm)">
+            <button class="btn btn-primary" id="login-btn" style="width:100%;justify-content:center">
+              <i data-lucide="log-in" class="icon-inline"></i> Login
+            </button>
+            <button class="btn btn-ghost" onclick="navigate('/contracts')" style="width:100%;justify-content:center">
+              Browse contracts (public)
+            </button>
+          </div>
+          <p class="rate-notice" style="margin-top:var(--sp-base)">Public reads are rate-limited to 100 per hour</p>
+        </div>
+      </div>`;
+  }
+
+  function bindLogin() {
+    const btn = document.getElementById("login-btn");
+    const passInput = document.getElementById("login-pass");
+    async function doLogin() {
+      const username = document.getElementById("login-user").value;
+      const password = passInput.value;
+      if (!username || !password) { toast("Enter username and password", "error"); return; }
+      btn.classList.add("loading");
+      btn.disabled = true;
+      const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
+      btn.classList.remove("loading");
+      btn.disabled = false;
+      if (r.ok) {
+        saveAuth(r.json.access_token, r.json.role, username);
+        toast("Logged in as " + username);
+        navigate("/dashboard");
+      } else {
+        toast(r.json?.error || "Invalid credentials", "error");
+      }
+    }
+    btn.onclick = doLogin;
+    passInput.addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+  }
+
+  function logout() {
+    saveAuth(null, null, null);
+    toast("Logged out");
+    navigate("/");
+  }
+
+  // ──────────────────────────────────────────
+  // Docs page
+  // ──────────────────────────────────────────
+  function renderDocsPage() {
+    const docs = [
+      {
+        icon: "settings",
+        title: "Operator Manual",
+        file: "operator-manual.md",
+        desc: "Start/stop the stack, backup/restore the database, run tests, and troubleshoot common failures."
+      },
+      {
+        icon: "shield",
+        title: "Admin Manual",
+        file: "admin-manual.md",
+        desc: "Authentication, user lifecycle (create, role assignment, reset, deactivate), contract CRUD, and rate limiting."
+      },
+      {
+        icon: "code",
+        title: "API Reference",
+        file: "api.md",
+        desc: "Complete endpoint reference with request/response examples, error model, and FHIR conformance details."
+      },
+      {
+        icon: "boxes",
+        title: "Architecture",
+        file: "architecture.md",
+        desc: "Container topology, port map, data flows, data model (Users + ContractRecords), and security posture."
+      },
+    ];
+
+    const runbooks = [
+      { icon: "key-round", title: "Credential Rotation", file: "runbooks/credential-rotation.md", desc: "Rotate JWT keys, admin passwords, and database credentials." },
+      { icon: "alert-triangle", title: "Incident Response", file: "runbooks/incident-response.md", desc: "Triage checklist and recovery procedures." },
+      { icon: "arrow-up-circle", title: "Upgrade Procedure", file: "runbooks/upgrade-procedure.md", desc: "Pre-upgrade checklist, upgrade steps, rollback." },
+    ];
+
+    function docCard(d) {
+      return \`
+        <div class="card" style="margin-bottom:var(--sp-base)">
+          <div style="display:flex;align-items:center;gap:var(--sp-sm);margin-bottom:var(--sp-sm)">
+            <i data-lucide="\${d.icon}" style="width:1.25rem;height:1.25rem;color:var(--pdhc-teal)"></i>
+            <h3 style="font-size:1.1rem;font-weight:600;margin:0">\${d.title}</h3>
+          </div>
+          <p style="color:var(--pdhc-slate);font-size:0.875rem;margin-bottom:var(--sp-md)">\${d.desc}</p>
+          <a href="/docs/\${d.file}" download class="btn btn-sm btn-secondary"><i data-lucide="download" class="icon-inline"></i> Download</a>
+        </div>\`;
+    }
+
+    return \`
+      <h1 class="page-title">Documentation</h1>
+      <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-lg)">Technical documentation for the PDHC Contract Manager. Download any manual as a Markdown file.</p>
+
+      <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:var(--sp-base)">Manuals</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-base);margin-bottom:var(--sp-xl)">
+        \${docs.map(docCard).join("")}
+      </div>
+
+      <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:var(--sp-base)">Runbooks</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-base)">
+        \${runbooks.map(docCard).join("")}
+      </div>\`;
+  }
+
+  // ──────────────────────────────────────────
+  // API Reference page
+  // ──────────────────────────────────────────
+  function renderApiPage() {
+    const endpoints = [
+      { method: "GET",    path: "/health",                              auth: "None",  rate: "—",       desc: "Service health check" },
+      { method: "POST",   path: "/auth/login",                          auth: "None",  rate: "—",       desc: "Authenticate, receive JWT" },
+      { method: "GET",    path: "/fhir/metadata",                       auth: "None",  rate: "100/hr",  desc: "FHIR R5 CapabilityStatement" },
+      { method: "GET",    path: "/fhir/Contract",                       auth: "None",  rate: "100/hr",  desc: "List contracts (Bundle)" },
+      { method: "GET",    path: "/fhir/Contract/{guid}",                auth: "None",  rate: "100/hr",  desc: "Read single contract" },
+      { method: "POST",   path: "/fhir/Contract",                       auth: "Admin", rate: "—",       desc: "Create contract" },
+      { method: "PUT",    path: "/fhir/Contract/{guid}",                auth: "Admin", rate: "—",       desc: "Update contract" },
+      { method: "DELETE", path: "/fhir/Contract/{guid}",                auth: "Admin", rate: "—",       desc: "Delete contract" },
+      { method: "GET",    path: "/admin/users",                         auth: "Admin", rate: "—",       desc: "List users" },
+      { method: "POST",   path: "/admin/users",                         auth: "Admin", rate: "—",       desc: "Create user" },
+      { method: "PUT",    path: "/admin/users/{guid}",                  auth: "Admin", rate: "—",       desc: "Update user role/status" },
+      { method: "POST",   path: "/admin/users/{guid}/reset-password",   auth: "Admin", rate: "—",       desc: "Reset user password" },
+    ];
+
+    const methodColor = { GET: "var(--pdhc-success)", POST: "var(--pdhc-info)", PUT: "var(--pdhc-warning)", DELETE: "var(--pdhc-danger)" };
+
+    const rows = endpoints.map(e => \`
+      <tr>
+        <td><span class="mono" style="font-weight:600;color:\${methodColor[e.method] || 'inherit'}">\${e.method}</span></td>
+        <td class="mono" style="font-size:0.8125rem">\${esc(e.path)}</td>
+        <td><span class="badge \${e.auth === 'Admin' ? 'badge-warning' : 'badge-success'}" style="font-size:0.75rem">\${e.auth}</span></td>
+        <td style="text-align:center">\${e.rate}</td>
+        <td>\${e.desc}</td>
+      </tr>\`).join("");
+
+    return \`
+      <h1 class="page-title">API Reference</h1>
+      <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-lg)">
+        All endpoints on <span class="mono">localhost:9021</span>. FHIR endpoints return <span class="mono">application/fhir+json</span>.
+        <a href="/fhir/metadata" target="_blank" rel="noopener" style="color:var(--pdhc-teal);margin-left:var(--sp-sm)">
+          <i data-lucide="external-link" class="icon-inline"></i> View CapabilityStatement
+        </a>
+      </p>
+
+      <div class="card" style="margin-bottom:var(--sp-xl)">
+        <h2 class="card-title" style="margin-bottom:var(--sp-base)">Endpoints</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Rate&nbsp;Limit</th><th>Description</th></tr></thead>
+            <tbody>\${rows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:var(--sp-lg)">
+        <h2 class="card-title" style="margin-bottom:var(--sp-base)">Authentication</h2>
+        <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-sm)">Obtain a JWT token via <span class="mono">POST /auth/login</span>:</p>
+        <div class="json-view">POST /auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "your-password"
+}
+
+→ 200 { "access_token": "eyJ...", "role": "admin" }</div>
+        <p style="color:var(--pdhc-slate);margin-top:var(--sp-sm)">Use the token on admin endpoints:</p>
+        <div class="json-view">Authorization: Bearer eyJ...</div>
+        <p style="color:var(--pdhc-slate-light);font-size:0.8125rem;margin-top:var(--sp-sm)">Tokens expire after 8 hours.</p>
+      </div>
+
+      <div class="card" style="margin-bottom:var(--sp-lg)">
+        <h2 class="card-title" style="margin-bottom:var(--sp-base)">Error Model</h2>
+        <p style="color:var(--pdhc-slate);margin-bottom:var(--sp-sm)">All errors return JSON with this shape:</p>
+        <div class="json-view">{
+  "error": "error_code",
+  "message": "Human-readable description"
+}</div>
+        <div style="margin-top:var(--sp-base)">
+          <p style="font-size:0.875rem"><strong>Status codes:</strong>
+            <span class="badge badge-success" style="font-size:0.75rem">200</span> OK,
+            <span class="badge badge-success" style="font-size:0.75rem">201</span> Created,
+            <span class="badge badge-success" style="font-size:0.75rem">204</span> Deleted,
+            <span class="badge badge-warning" style="font-size:0.75rem">400</span> Validation,
+            <span class="badge badge-warning" style="font-size:0.75rem">401</span> Unauthorized,
+            <span class="badge badge-warning" style="font-size:0.75rem">403</span> Forbidden,
+            <span class="badge badge-warning" style="font-size:0.75rem">404</span> Not Found,
+            <span class="badge badge-warning" style="font-size:0.75rem">409</span> Conflict,
+            <span class="badge" style="font-size:0.75rem;background:var(--pdhc-danger);color:white">429</span> Rate Limited
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title" style="margin-bottom:var(--sp-base)">FHIR Conformance</h2>
+        <ul style="color:var(--pdhc-slate);padding-left:var(--sp-lg);line-height:2">
+          <li><strong>FHIR Version:</strong> R5 (5.0.0)</li>
+          <li><strong>Resource:</strong> Contract</li>
+          <li><strong>Bundle:</strong> searchset type for list responses</li>
+          <li><strong>IDs:</strong> UUID v4 strings (GUIDs)</li>
+          <li><strong>Versioning:</strong> not supported</li>
+          <li><strong>History:</strong> not supported</li>
+        </ul>
+      </div>\`;
+  }
+
+  // ──────────────────────────────────────────
+  // Public content
+  // ──────────────────────────────────────────
+  function renderPublicContent(route) {
+    if (route === "/docs") return renderDocsPage();
+    if (route === "/api") return renderApiPage();
+    if (route.startsWith("/contracts/") && route !== "/contracts") {
+      return `
+        <div class="detail-header">
+          <button class="btn btn-sm" onclick="navigate('/contracts')"><i data-lucide="arrow-left" class="icon-inline"></i> Back</button>
+          <h1 class="page-title" style="margin:0;font-size:1.25rem">Contract Detail</h1>
+        </div>
+        <div class="card" id="public-detail"><div class="empty">Loading...</div></div>`;
+    }
+    return `
+      <h1 class="page-title">Contracts</h1>
+      <div class="search-bar">
+        <input id="search-input" placeholder="Search contracts..." aria-label="Search contracts"/>
+      </div>
+      <div class="card" id="contracts-table"><div class="empty">Loading contracts...</div></div>
+      <p class="rate-notice" style="margin-top:var(--sp-base)">Public reads: 100 requests per hour</p>`;
+  }
+
+  async function bindPublic(route) {
+    if (route === "/docs" || route === "/api") return;
+    if (route.startsWith("/contracts/") && route !== "/contracts") {
+      const guid = route.split("/contracts/")[1];
+      const r = await api("/fhir/Contract/" + guid);
+      const el = document.getElementById("public-detail");
+      if (!el) return;
+      if (r.ok) {
+        el.innerHTML = `
+          <p style="font-size:0.8125rem;color:var(--pdhc-slate);margin-bottom:var(--sp-base)">
+            <i data-lucide="hash" class="icon-inline"></i>
+            <span class="mono">${esc(guid)}</span>
+          </p>
+          <div class="json-view">${esc(JSON.stringify(r.json, null, 2))}</div>`;
+      } else {
+        el.innerHTML = '<div class="empty">Contract not found</div>';
+      }
+      reinitIcons();
+      return;
+    }
+
+    const r = await api("/fhir/Contract");
+    if (!r.ok) return;
+    state.contracts = (r.json?.entry || []).map(e => e.resource);
+    renderContractsTable(state.contracts);
+
+    const searchInput = document.getElementById("search-input");
+    if (searchInput) {
+      let debounce;
+      searchInput.addEventListener("input", () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => {
+          const q = searchInput.value.toLowerCase();
+          renderContractsTable(state.contracts.filter(c => JSON.stringify(c).toLowerCase().includes(q)));
+        }, 200);
+      });
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // Dashboard
+  // ──────────────────────────────────────────
+  function renderDashboard() {
+    return `
+      <h1 class="page-title">Dashboard</h1>
+      <div class="stats-row">
+        <div class="stat-card"><div class="num" id="stat-contracts">—</div><div class="label"><i data-lucide="file-text" class="icon-inline"></i> Contracts</div></div>
+        <div class="stat-card"><div class="num" id="stat-users">—</div><div class="label"><i data-lucide="users" class="icon-inline"></i> Users</div></div>
+        <div class="stat-card"><div class="num" id="stat-api">—</div><div class="label"><i data-lucide="activity" class="icon-inline"></i> API</div></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Recent Contracts</h2>
+        <div id="recent-contracts"><div class="empty">Loading...</div></div>
+      </div>`;
+  }
+
+  // ──────────────────────────────────────────
+  // Contracts
+  // ──────────────────────────────────────────
+  function renderContractsList() {
+    return `
+      <div class="page-header">
+        <h1 class="page-title">Contracts</h1>
+        ${isAdmin() ? '<button class="btn btn-primary" onclick="navigate(\'/contracts/new\')"><i data-lucide="plus" class="icon-inline"></i> New Contract</button>' : ''}
+      </div>
+      <div class="search-bar">
+        <input id="search-input" placeholder="Search contracts..." aria-label="Search contracts"/>
+      </div>
+      <div class="card"><div class="table-wrap" id="contracts-table"><div class="empty">Loading...</div></div></div>`;
+  }
+
+  function renderContractsTable(contracts) {
+    const el = document.getElementById("contracts-table");
+    if (!el) return;
+    if (!contracts.length) { el.innerHTML = '<div class="empty"><i data-lucide="inbox" class="icon-btn" style="display:block;margin:0 auto var(--sp-sm)"></i>No contracts found</div>'; reinitIcons(); return; }
+    const admin = isAdmin();
+    el.innerHTML = `
+      <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th>
+          <th>Status</th>
+          <th>Period</th>
+          ${admin ? '<th style="text-align:right">Actions</th>' : ''}
+        </tr></thead>
+        <tbody>
+          ${contracts.map(c => {
+            const id = c.id || "—";
+            const shortId = id.length > 8 ? id.slice(0, 8) + "..." : id;
+            const status = c.status || "draft";
+            const badgeCls = "badge-" + status.replace(/ /g, "-");
+            const start = c.period?.start ? c.period.start.slice(0, 10) : "—";
+            const end = c.period?.end ? c.period.end.slice(0, 10) : "—";
+            return `<tr class="clickable" onclick="navigate('/contracts/${id}')">
+              <td class="mono" title="${esc(id)}">${esc(shortId)}</td>
+              <td><span class="badge ${badgeCls}">${esc(status)}</span></td>
+              <td style="font-size:0.8125rem;color:var(--pdhc-slate)">${esc(start)} — ${esc(end)}</td>
+              ${admin ? `<td style="text-align:right" onclick="event.stopPropagation()">
+                <button class="btn btn-sm btn-secondary" onclick="navigate('/contracts/edit/${id}')"><i data-lucide="pencil" class="icon-inline"></i> Edit</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteContract('${id}')"><i data-lucide="trash-2" class="icon-inline"></i></button>
+              </td>` : ''}
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+      </div>`;
+    reinitIcons();
+  }
+
+  // ──────────────────────────────────────────
+  // Contract detail
+  // ──────────────────────────────────────────
+  function renderContractDetail(guid) {
+    return `
+      <div class="detail-header">
+        <button class="btn btn-sm" onclick="navigate('/contracts')"><i data-lucide="arrow-left" class="icon-inline"></i> Back</button>
+        <h1 class="page-title" style="margin:0;font-size:1.25rem">Contract</h1>
+        <span class="mono" style="color:var(--pdhc-slate)">${esc(guid)}</span>
+        ${isAdmin() ? `<button class="btn btn-sm btn-secondary" onclick="navigate('/contracts/edit/${guid}')" style="margin-left:auto"><i data-lucide="pencil" class="icon-inline"></i> Edit</button>` : ''}
+      </div>
+      <div class="card" id="contract-detail"><div class="empty">Loading...</div></div>`;
+  }
+
+  // ──────────────────────────────────────────
+  // Contract editor
+  // ──────────────────────────────────────────
+  function renderContractEditor(guid) {
+    const isEdit = !!guid;
+    return `
+      <div class="detail-header">
+        <button class="btn btn-sm" onclick="navigate('/contracts')"><i data-lucide="arrow-left" class="icon-inline"></i> Back</button>
+        <h1 class="page-title" style="margin:0;font-size:1.25rem">${isEdit ? "Edit" : "New"} Contract</h1>
+      </div>
+      <div class="card">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ed-status">Status</label>
+            <select id="ed-status">
+              <option value="draft">Draft</option>
+              <option value="executed">Executed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="disputed">Disputed</option>
+              <option value="entered-in-error">Entered in Error</option>
+            </select>
+          </div>
+          <div class="form-group"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ed-start">Period Start</label>
+            <input id="ed-start" type="date"/>
+          </div>
+          <div class="form-group">
+            <label for="ed-end">Period End</label>
+            <input id="ed-end" type="date"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="ed-narrative">Narrative (text.div)</label>
+          <input id="ed-narrative" placeholder="Agreement description..."/>
+        </div>
+        <div class="form-group">
+          <label for="ed-json">Full FHIR JSON (advanced)</label>
+          <textarea id="ed-json"></textarea>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="ed-save"><i data-lucide="${isEdit ? 'save' : 'plus'}" class="icon-inline"></i> ${isEdit ? "Save Changes" : "Create Contract"}</button>
+          <button class="btn" onclick="navigate('/contracts')">Cancel</button>
+          ${isEdit ? `<button class="btn btn-danger" onclick="deleteContract('${guid}')" style="margin-left:auto"><i data-lucide="trash-2" class="icon-inline"></i> Delete</button>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // ──────────────────────────────────────────
+  // Users
+  // ──────────────────────────────────────────
+  function renderUsersList() {
+    return `
+      <div class="page-header">
+        <h1 class="page-title">Users</h1>
+        <button class="btn btn-primary" id="create-user-btn"><i data-lucide="user-plus" class="icon-inline"></i> New User</button>
+      </div>
+      <div class="card"><div class="table-wrap" id="users-table"><div class="empty">Loading...</div></div></div>`;
+  }
+
+  function renderUsersTable(users) {
+    const el = document.getElementById("users-table");
+    if (!el) return;
+    if (!users.length) { el.innerHTML = '<div class="empty">No users</div>'; return; }
+    el.innerHTML = `
+      <table>
+        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody>
+          ${users.map(u => `<tr>
+            <td><i data-lucide="user" class="icon-inline" style="color:var(--pdhc-slate-light)"></i> ${esc(u.username)}</td>
+            <td><span class="badge badge-${u.role}">${u.role}</span></td>
+            <td><span class="badge badge-${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+            <td style="font-size:0.8125rem;color:var(--pdhc-slate)">${u.created_at ? u.created_at.slice(0, 10) : '—'}</td>
+            <td style="text-align:right">
+              <button class="btn btn-sm" onclick="showResetPasswordModal('${u.guid}','${esc(u.username)}')"><i data-lucide="key" class="icon-inline"></i> Reset</button>
+              <button class="btn btn-sm btn-secondary" onclick="toggleUserRole('${u.guid}','${u.role}')"><i data-lucide="arrow-right-left" class="icon-inline"></i> ${u.role === 'admin' ? 'reader' : 'admin'}</button>
+              <button class="btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-primary'}" onclick="toggleUserActive('${u.guid}',${u.is_active})">
+                <i data-lucide="${u.is_active ? 'user-x' : 'user-check'}" class="icon-inline"></i>
+              </button>
+            </td>
+          </tr>`).join("")}
+        </tbody>
+      </table>`;
+    reinitIcons();
+  }
+
+  // ──────────────────────────────────────────
+  // Modals
+  // ──────────────────────────────────────────
+  function showModal(html) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+    document.body.appendChild(overlay);
+    reinitIcons();
+    return overlay;
+  }
+
+  function closeModals() {
+    document.querySelectorAll(".modal-overlay").forEach(el => el.remove());
+  }
+
+  window.showCreateUserModal = function() {
+    showModal(`
+      <h2><i data-lucide="user-plus" class="icon-inline"></i> Create User</h2>
+      <div class="form-group"><label for="mu-user">Username</label><input id="mu-user"/></div>
+      <div class="form-group"><label for="mu-pass">Password</label><input id="mu-pass" type="password"/></div>
+      <div class="form-group"><label for="mu-role">Role</label>
+        <select id="mu-role"><option value="reader">Reader</option><option value="admin">Admin</option></select>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="mu-save"><i data-lucide="check" class="icon-inline"></i> Create</button>
+        <button class="btn" onclick="closeModals()">Cancel</button>
+      </div>
+    `);
+    document.getElementById("mu-save").onclick = async () => {
+      const username = document.getElementById("mu-user").value;
+      const password = document.getElementById("mu-pass").value;
+      const role = document.getElementById("mu-role").value;
+      if (!username || !password) { toast("Fill all fields", "error"); return; }
+      const r = await api("/admin/users", { method: "POST", body: JSON.stringify({ username, password, role }) });
+      if (r.ok) { toast("User created"); closeModals(); loadUsers(); }
+      else toast(r.json?.message || "Failed", "error");
+    };
+  };
+
+  window.showResetPasswordModal = function(guid, username) {
+    showModal(`
+      <h2><i data-lucide="key" class="icon-inline"></i> Reset Password</h2>
+      <p style="color:var(--pdhc-slate);font-size:0.875rem;margin-bottom:var(--sp-base)">User: <strong>${esc(username)}</strong></p>
+      <div class="form-group"><label for="mrp-pass">New Password</label><input id="mrp-pass" type="password"/></div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="mrp-save"><i data-lucide="check" class="icon-inline"></i> Reset Password</button>
+        <button class="btn" onclick="closeModals()">Cancel</button>
+      </div>
+    `);
+    document.getElementById("mrp-save").onclick = async () => {
+      const password = document.getElementById("mrp-pass").value;
+      if (!password) { toast("Enter a password", "error"); return; }
+      const r = await api("/admin/users/" + guid + "/reset-password", { method: "POST", body: JSON.stringify({ password }) });
+      if (r.ok) { toast("Password reset"); closeModals(); }
+      else toast(r.json?.message || "Failed", "error");
+    };
+  };
+
+  // ──────────────────────────────────────────
+  // Actions
+  // ──────────────────────────────────────────
+  window.deleteContract = async function(guid) {
+    if (!confirm("Delete this contract? This cannot be undone.")) return;
+    const r = await api("/fhir/Contract/" + guid, { method: "DELETE" });
+    if (r.ok || r.status === 204) { toast("Contract deleted"); navigate("/contracts"); }
+    else toast(r.json?.message || "Delete failed", "error");
+  };
+
+  window.toggleUserRole = async function(guid, currentRole) {
+    const newRole = currentRole === "admin" ? "reader" : "admin";
+    const r = await api("/admin/users/" + guid, { method: "PUT", body: JSON.stringify({ role: newRole }) });
+    if (r.ok) { toast("Role updated to " + newRole); loadUsers(); }
+    else toast(r.json?.message || "Failed", "error");
+  };
+
+  window.toggleUserActive = async function(guid, isActive) {
+    const r = await api("/admin/users/" + guid, { method: "PUT", body: JSON.stringify({ is_active: !isActive }) });
+    if (r.ok) { toast(isActive ? "User deactivated" : "User activated"); loadUsers(); }
+    else toast(r.json?.message || "Failed", "error");
+  };
+
+  // ──────────────────────────────────────────
+  // Data loaders
+  // ──────────────────────────────────────────
+  async function loadContracts() {
+    const r = await api("/fhir/Contract");
+    if (!r.ok) return [];
+    state.contracts = (r.json?.entry || []).map(e => e.resource);
+    return state.contracts;
+  }
+
+  async function loadUsers() {
+    const r = await api("/admin/users");
+    if (!r.ok) return [];
+    state.users = r.json || [];
+    renderUsersTable(state.users);
+    return state.users;
+  }
+
+  // ──────────────────────────────────────────
+  // Page binder
+  // ──────────────────────────────────────────
+  async function bindPage(route) {
+    if (route === "/" || route === "/dashboard") {
+      const [contracts, health] = await Promise.all([loadContracts(), api("/health")]);
+      const statC = document.getElementById("stat-contracts");
+      const statA = document.getElementById("stat-api");
+      if (statC) statC.textContent = contracts.length;
+      if (statA) {
+        statA.textContent = health.ok ? "OK" : "DOWN";
+        if (!health.ok) statA.style.color = "var(--pdhc-danger)";
+      }
+      if (isAdmin()) {
+        const users = await loadUsers();
+        const statU = document.getElementById("stat-users");
+        if (statU) statU.textContent = users.length;
+      }
+      const recentEl = document.getElementById("recent-contracts");
+      if (recentEl) {
+        const recent = contracts.slice(0, 5);
+        if (!recent.length) {
+          recentEl.innerHTML = '<div class="empty">No contracts yet</div>';
+        } else {
+          recentEl.innerHTML = `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Status</th><th>Period</th></tr></thead><tbody>
+            ${recent.map(c => {
+              const id = c.id || "—";
+              const shortId = id.length > 8 ? id.slice(0, 8) + "..." : id;
+              const status = c.status || "draft";
+              return `<tr class="clickable" onclick="navigate('/contracts/${id}')">
+                <td class="mono">${esc(shortId)}</td>
+                <td><span class="badge badge-${status}">${esc(status)}</span></td>
+                <td style="font-size:0.8125rem;color:var(--pdhc-slate)">${c.period?.start?.slice(0,10) || '—'} — ${c.period?.end?.slice(0,10) || '—'}</td>
+              </tr>`;
+            }).join("")}
+          </tbody></table></div>`;
+        }
+        reinitIcons();
+      }
+    }
+
+    else if (route === "/contracts") {
+      const contracts = await loadContracts();
+      renderContractsTable(contracts);
+      const searchInput = document.getElementById("search-input");
+      if (searchInput) {
+        let debounce;
+        searchInput.addEventListener("input", () => {
+          clearTimeout(debounce);
+          debounce = setTimeout(() => {
+            const q = searchInput.value.toLowerCase();
+            renderContractsTable(state.contracts.filter(c => JSON.stringify(c).toLowerCase().includes(q)));
+          }, 200);
+        });
+      }
+    }
+
+    else if (route.startsWith("/contracts/edit/")) {
+      const guid = route.split("/contracts/edit/")[1];
+      const r = await api("/fhir/Contract/" + guid);
+      if (!r.ok) { toast("Contract not found", "error"); navigate("/contracts"); return; }
+      const contract = r.json;
+      const statusSel = document.getElementById("ed-status");
+      const startIn = document.getElementById("ed-start");
+      const endIn = document.getElementById("ed-end");
+      const narrIn = document.getElementById("ed-narrative");
+      const jsonTa = document.getElementById("ed-json");
+      if (statusSel && contract.status) statusSel.value = contract.status;
+      if (startIn && contract.period?.start) startIn.value = contract.period.start.slice(0, 10);
+      if (endIn && contract.period?.end) endIn.value = contract.period.end.slice(0, 10);
+      if (narrIn && contract.text?.div) narrIn.value = contract.text.div.replace(/<[^>]*>/g, "");
+      if (jsonTa) jsonTa.value = JSON.stringify(contract, null, 2);
+
+      function syncFormToJson() {
+        try {
+          const obj = JSON.parse(jsonTa.value);
+          obj.status = statusSel.value;
+          obj.period = obj.period || {};
+          if (startIn.value) obj.period.start = startIn.value + "T00:00:00Z";
+          if (endIn.value) obj.period.end = endIn.value + "T00:00:00Z";
+          if (narrIn.value) obj.text = { status: "generated", div: "<div>" + esc(narrIn.value) + "</div>" };
+          jsonTa.value = JSON.stringify(obj, null, 2);
+        } catch {}
+      }
+      [statusSel, startIn, endIn, narrIn].forEach(el => { if (el) el.addEventListener("change", syncFormToJson); });
+
+      document.getElementById("ed-save").onclick = async () => {
+        let payload;
+        try { payload = JSON.parse(jsonTa.value); } catch { toast("Invalid JSON", "error"); return; }
+        const r = await api("/fhir/Contract/" + guid, { method: "PUT", body: JSON.stringify(payload) });
+        if (r.ok) { toast("Contract updated"); navigate("/contracts/" + guid); }
+        else toast(r.json?.message || "Save failed", "error");
+      };
+    }
+
+    else if (route === "/contracts/new") {
+      const jsonTa = document.getElementById("ed-json");
+      const statusSel = document.getElementById("ed-status");
+      const startIn = document.getElementById("ed-start");
+      const endIn = document.getElementById("ed-end");
+      const narrIn = document.getElementById("ed-narrative");
+      const today = new Date().toISOString().slice(0, 10);
+      const defaultContract = { resourceType: "Contract", status: "draft", period: { start: today + "T00:00:00Z" }, text: { status: "generated", div: "<div></div>" } };
+      if (jsonTa) jsonTa.value = JSON.stringify(defaultContract, null, 2);
+      if (startIn) startIn.value = today;
+
+      function syncFormToJson() {
+        try {
+          const obj = JSON.parse(jsonTa.value);
+          obj.status = statusSel.value;
+          obj.period = obj.period || {};
+          if (startIn.value) obj.period.start = startIn.value + "T00:00:00Z";
+          if (endIn.value) obj.period.end = endIn.value + "T00:00:00Z";
+          if (narrIn.value) obj.text = { status: "generated", div: "<div>" + esc(narrIn.value) + "</div>" };
+          jsonTa.value = JSON.stringify(obj, null, 2);
+        } catch {}
+      }
+      [statusSel, startIn, endIn, narrIn].forEach(el => { if (el) el.addEventListener("change", syncFormToJson); });
+
+      document.getElementById("ed-save").onclick = async () => {
+        let payload;
+        try { payload = JSON.parse(jsonTa.value); } catch { toast("Invalid JSON", "error"); return; }
+        const r = await api("/fhir/Contract", { method: "POST", body: JSON.stringify(payload) });
+        if (r.ok) { toast("Contract created"); navigate("/contracts/" + r.json.id); }
+        else toast(r.json?.message || "Create failed", "error");
+      };
+    }
+
+    else if (route.startsWith("/contracts/") && !route.includes("edit") && !route.includes("new")) {
+      const guid = route.split("/contracts/")[1];
+      const r = await api("/fhir/Contract/" + guid);
+      const el = document.getElementById("contract-detail");
+      if (!el) return;
+      if (r.ok) {
+        el.innerHTML = `<div class="json-view">${esc(JSON.stringify(r.json, null, 2))}</div>`;
+      } else {
+        el.innerHTML = '<div class="empty">Contract not found</div>';
+      }
+    }
+
+    else if (route === "/users") {
+      await loadUsers();
+      const btn = document.getElementById("create-user-btn");
+      if (btn) btn.onclick = () => showCreateUserModal();
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // Util
+  // ──────────────────────────────────────────
+  function esc(str) {
+    if (!str) return "";
+    return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  // ──────────────────────────────────────────
+  // Boot
+  // ──────────────────────────────────────────
+  if (!state.route || state.route === "/") {
+    state.route = isLoggedIn() ? "/dashboard" : "/contracts";
+    location.hash = state.route;
+  }
+  render();
+  </script>
+</body>
+</html>
