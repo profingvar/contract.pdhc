@@ -9,24 +9,31 @@ export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 # Docker CLI v29 uses contexts, not DOCKER_HOST. Unset to avoid conflicts.
 unset DOCKER_HOST
 
-# Ensure the colima docker context is active (if colima is in use)
+# Detect Colima: use --context flag so it works reliably in scripts
 if docker context ls --format '{{.Name}}' 2>/dev/null | grep -q '^colima$'; then
-    docker context use colima >/dev/null 2>&1 || true
+    DOCKER="docker --context colima"
+else
+    DOCKER="docker"
 fi
-
-DOCKER="docker"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
 BACKUP_DIR="$SCRIPT_DIR/db_backups"
 
 # Detect docker-compose binary (server uses hyphenated standalone)
+# Standalone docker-compose doesn't support --context but reads DOCKER_HOST
 if [ -x /opt/homebrew/bin/docker-compose ]; then
     DC="/opt/homebrew/bin/docker-compose"
 elif command -v docker-compose >/dev/null 2>&1; then
     DC="docker-compose"
 else
     DC="docker compose"
+fi
+
+# Export DOCKER_HOST for docker-compose (standalone binary needs it)
+COLIMA_SOCK="$HOME/.colima/default/docker.sock"
+if [ -S "$COLIMA_SOCK" ]; then
+    export DOCKER_HOST="unix://$COLIMA_SOCK"
 fi
 
 echo "=== contract.pdhc startup ==="
@@ -51,12 +58,15 @@ if ! $DOCKER ps >/dev/null 2>&1; then
     if command -v colima >/dev/null 2>&1; then
         colima start 2>/dev/null || true
         sleep 5
-        # Activate colima context after start
-        docker context use colima >/dev/null 2>&1 || true
+        # Re-detect socket and context after start
+        DOCKER="docker --context colima"
+        COLIMA_SOCK="$HOME/.colima/default/docker.sock"
+        if [ -S "$COLIMA_SOCK" ]; then
+            export DOCKER_HOST="unix://$COLIMA_SOCK"
+        fi
     fi
     if ! $DOCKER ps >/dev/null 2>&1; then
         echo "ERROR: Docker is not running and could not be started."
-        echo "  Context: $(docker context show 2>/dev/null || echo unknown)"
         echo "  Try: colima stop && colima start"
         exit 1
     fi
