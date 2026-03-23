@@ -500,7 +500,7 @@
   // ──────────────────────────────────────────
   const API = location.port === "9022"
     ? location.protocol + "//" + location.hostname + ":9021"
-    : "http://localhost:9021";
+    : location.origin;
 
   const state = {
     token: sessionStorage.getItem("token") || null,
