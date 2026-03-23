@@ -37,12 +37,11 @@ services:
     restart: unless-stopped
 
   web:
-    image: nginx:alpine
+    build:
+      context: ./web
     depends_on:
       - api
     volumes:
-      - ./web/dist:/usr/share/nginx/html:ro
-      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docs:/usr/share/nginx/docs:ro
     ports:
       - "9022:80"
