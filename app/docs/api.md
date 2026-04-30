@@ -126,8 +126,14 @@ List all contracts. Public, rate-limited (100/hour per IP).
       "resource": {
         "resourceType": "Contract",
         "id": "a1b2c3d4-...",
-        "status": "executable",
-        "period": {"start": "2026-01-01T00:00:00Z"}
+        "status": "executed",
+        "period": {"start": "2026-01-01T00:00:00Z"},
+        "extension": [
+          { "url": "https://contract.pdhc.se/StructureDefinition/legally-ok",           "valueBoolean": true },
+          { "url": "https://contract.pdhc.se/StructureDefinition/pub-exists",           "valueBoolean": true },
+          { "url": "https://contract.pdhc.se/StructureDefinition/legal-provider",       "valueBoolean": true },
+          { "url": "https://contract.pdhc.se/StructureDefinition/provider-data-status", "valueCode":    "ok" }
+        ]
       }
     }
   ]
@@ -157,16 +163,42 @@ Create a new contract. **Admin required.**
 ```json
 {
   "resourceType": "Contract",
-  "status": "executable",
+  "status": "negotiable",
   "period": {
     "start": "2026-01-01T00:00:00Z",
     "end": "2026-12-31T23:59:59Z"
   },
   "subject": [
     {"reference": "Organization/abc-123"}
+  ],
+  "extension": [
+    { "url": "https://contract.pdhc.se/StructureDefinition/legally-ok",           "valueBoolean": false },
+    { "url": "https://contract.pdhc.se/StructureDefinition/pub-exists",           "valueBoolean": false },
+    { "url": "https://contract.pdhc.se/StructureDefinition/legal-provider",       "valueBoolean": false },
+    { "url": "https://contract.pdhc.se/StructureDefinition/provider-data-status", "valueCode":    "unclear" }
   ]
 }
 ```
+
+**Status field** — the platform UI emits one of four FHIR R5 codes:
+
+| FHIR code     | UI label              | Note |
+|---------------|-----------------------|------|
+| `negotiable`  | Under consideration   | Default for new contracts |
+| `executed`    | **Active**            | Only state that qualifies the contract for fulfilling requests |
+| `terminated`  | Expired               | |
+| `revoked`     | Revoked               | Irreversible at the platform layer |
+
+Other FHIR codes are accepted at the API layer for compatibility with externally authored Contracts but are not emitted by the platform UI.
+
+**Extension fields** — four governance flags persist as `Contract.extension[]` for FHIR portability:
+
+| URL                                                                         | Type         |
+|-----------------------------------------------------------------------------|--------------|
+| `https://contract.pdhc.se/StructureDefinition/legally-ok`                   | valueBoolean |
+| `https://contract.pdhc.se/StructureDefinition/pub-exists`                   | valueBoolean |
+| `https://contract.pdhc.se/StructureDefinition/legal-provider`               | valueBoolean |
+| `https://contract.pdhc.se/StructureDefinition/provider-data-status`         | valueCode (`ok` / `deficient` / `unclear`) |
 
 - **`resourceType`**: must be `"Contract"` (required)
 - **`status`**: valid FHIR R5 contract status code (required)
@@ -300,7 +332,58 @@ When exceeded, the server returns `429 Too Many Requests`.
 
 ---
 
-## 7) FHIR conformance
+## 7) Internal service-to-service API
+
+These endpoints are used by other PDHC services (primarily gateway.pdhc) for real-time scope lookups. They are **not public** — they require an `X-Service-Key` header matching the `INTERNAL_SERVICE_KEY` environment variable.
+
+### 7.1 GET /internal/contract/{guid}/scope
+
+Fetch the return scope for a contract. Used by gateway.pdhc to enforce which observation concepts a provider may submit.
+
+**Headers:**
+
+```
+X-Service-Key: <internal-service-key>
+```
+
+**Response** (200):
+
+```json
+{
+  "contract_guid": "a1b2c3d4-...",
+  "status": "executed",
+  "request_scope": [
+    { "concept_guid": "c-001", "concept_name": "Blood Pressure", "requirement": "obligatory" }
+  ],
+  "return_scope": {
+    "obligatory_return": [
+      { "concept_guid": "c-001", "concept_name": "Blood Pressure" }
+    ],
+    "optional_return": [
+      { "concept_guid": "c-002", "concept_name": "Pain Level" }
+    ]
+  }
+}
+```
+
+**Errors:**
+
+| Code | Meaning |
+|------|---------|
+| 401 | Missing or invalid `X-Service-Key` |
+| 404 | Contract not found |
+
+**Scope enforcement rules (applied by gateway.pdhc):**
+
+- All observation `concept_guid` values must be in `obligatory_return` or `optional_return`
+- On `status: completed`, all `obligatory_return` concepts must be present
+- On `status: in-progress`, obligatory check is skipped
+- **Contract `status` must be `executed`** for any submission to be accepted; `negotiable`, `terminated`, or `revoked` (or any other code) cause the submission to be rejected
+- If no scope is defined (empty `return_scope`), all concepts are permitted
+
+---
+
+## 8) FHIR conformance
 
 This server implements a subset of FHIR R5:
 

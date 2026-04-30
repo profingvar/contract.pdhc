@@ -218,11 +218,59 @@ const API = location.port === "9022"
 const SSO_URL = "https://sso.pdhc.se";
 const PLAN_URL = "https://plan.pdhc.se";
 
-const STATUSES = [
-  "amended","appended","cancelled","disputed","entered-in-error",
-  "executable","executed","negotiable","offered","policy",
-  "rejected","renewed","revoked","resolved","terminated"
+// Status options — UI labels mapped to FHIR R5 Contract.status codes.
+// We constrain the choice to four logical states (under consideration /
+// active / expired / revoked) but persist the FHIR-canonical code so the
+// JSON validates against generic FHIR R5 tooling.
+//
+// `executed` is the only status that qualifies a contract as a basis
+// for fulfilling requests (gate enforced below).
+const STATUS_OPTIONS = [
+  { code: "negotiable",  label: "Under consideration" },
+  { code: "executed",    label: "Active" },
+  { code: "terminated",  label: "Expired" },
+  { code: "revoked",     label: "Revoked" },
 ];
+const STATUS_LABEL = Object.fromEntries(STATUS_OPTIONS.map(o => [o.code, o.label]));
+const STATUSES = STATUS_OPTIONS.map(o => o.code);  // back-compat for any caller still expecting the array
+
+// Platform extension URLs (FHIR-portable — these travel with the
+// Contract.json across servers, no platform-specific column needed).
+const EXT_BASE = "https://contract.pdhc.se/StructureDefinition";
+const EXT_LEGALLY_OK    = `${EXT_BASE}/legally-ok`;       // valueBoolean
+const EXT_PUB_EXISTS    = `${EXT_BASE}/pub-exists`;       // valueBoolean
+const EXT_LEGAL_PROVIDER= `${EXT_BASE}/legal-provider`;   // valueBoolean
+const EXT_PROVIDER_DATA = `${EXT_BASE}/provider-data-status`; // valueCode: ok | deficient | unclear
+
+const PROVIDER_DATA_OPTIONS = [
+  { code: "ok",         label: "Verified OK" },
+  { code: "deficient",  label: "Deficient" },
+  { code: "unclear",    label: "Unclear" },
+];
+
+// ---- FHIR Contract.extension[] helpers --------------------------------
+function extGet(contract, url) {
+  if (!contract || !Array.isArray(contract.extension)) return undefined;
+  const e = contract.extension.find(x => x && x.url === url);
+  if (!e) return undefined;
+  if ("valueBoolean" in e) return e.valueBoolean;
+  if ("valueCode" in e) return e.valueCode;
+  if ("valueString" in e) return e.valueString;
+  return undefined;
+}
+function extSet(contract, url, value, valueKey) {
+  if (!contract.extension) contract.extension = [];
+  const i = contract.extension.findIndex(x => x && x.url === url);
+  // null/undefined removes the extension entirely
+  if (value === null || value === undefined || value === "") {
+    if (i >= 0) contract.extension.splice(i, 1);
+    return;
+  }
+  const entry = { url };
+  entry[valueKey] = value;
+  if (i >= 0) contract.extension[i] = entry;
+  else contract.extension.push(entry);
+}
 
 const state = {
   token: sessionStorage.getItem("token") || null,
@@ -292,7 +340,7 @@ async function api(path, opts = {}) {
   if (state.token) headers.Authorization = "Bearer " + state.token;
   try {
     const res = await fetch(API + path, { ...opts, headers });
-    if (res.status === 401 && state.token) { saveAuth(null, null, null, null); navigate("/login"); toast("Session expired — please sign in again", "error"); return { ok: false, status: 401, json: null }; }
+    if (res.status === 401 && state.token) { saveAuth(null, null, null, null); toast("Session expired — redirecting to sign-in", "error"); window.location.assign(API + "/api/v1/auth/login"); return { ok: false, status: 401, json: null }; }
     const text = await res.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
@@ -315,7 +363,7 @@ async function loadOrganisations() {
 async function loadPlanDefinitions() {
   if (state.planDefsLoaded) return state.planDefinitions;
   try {
-    const res = await fetch(PLAN_URL + "/api/v1/plandefinitions");
+    const res = await fetch(PLAN_URL + "/api/v1/plandefinitions?per_page=200");
     if (res.ok) {
       const data = await res.json();
       state.planDefinitions = data.items || data || [];
@@ -323,6 +371,41 @@ async function loadPlanDefinitions() {
     }
   } catch (e) { console.warn("Could not load PlanDefinitions:", e.message); }
   return state.planDefinitions;
+}
+
+async function loadConcepts() {
+  if (state.conceptsLoaded) return state.concepts;
+  state.concepts = [];
+  try {
+    const res = await fetch(PLAN_URL + "/api/v1/concepts?per_page=500");
+    if (res.ok) {
+      const data = await res.json();
+      state.concepts = data.items || data || [];
+      state.conceptsLoaded = true;
+    }
+  } catch (e) { console.warn("Could not load Concepts:", e.message); }
+  return state.concepts;
+}
+
+async function loadOrgMembers(orgGuid, selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">To whom it may concern</option>';
+  if (!orgGuid) return;
+  try {
+    const res = await fetch(SSO_URL + "/api/public/organisations/" + orgGuid + "/members");
+    if (res.ok) {
+      const members = await res.json();
+      members.forEach(m => {
+        const name = (m.first_name + " " + m.last_name).trim() || m.email;
+        const opt = document.createElement("option");
+        opt.value = m.user_guid;
+        opt.textContent = name + " (" + m.professional_role + ")";
+        opt.dataset.display = name;
+        sel.appendChild(opt);
+      });
+    }
+  } catch (e) { console.warn("Could not load org members:", e.message); }
 }
 
 // ──────────────────────────────────────────
@@ -347,25 +430,41 @@ window.addEventListener("hashchange", () => { state.route = location.hash.slice(
 // Helpers
 // ──────────────────────────────────────────
 function statusBadge(status) {
+  // Map only the 4 platform-supported codes to badge styles. Any other
+  // FHIR Contract.status that arrives (legacy data, externally authored)
+  // renders neutral.
   const cls = {
-    executed: "badge-success", executable: "badge-success",
-    offered: "badge-info", negotiable: "badge-info", policy: "badge-info",
-    amended: "badge-warning", appended: "badge-warning", renewed: "badge-warning", disputed: "badge-warning", resolved: "badge-pending",
-    cancelled: "badge-danger", rejected: "badge-danger", revoked: "badge-danger", terminated: "badge-danger", "entered-in-error": "badge-danger",
+    executed:   "badge-success",
+    negotiable: "badge-info",
+    terminated: "badge-warning",
+    revoked:    "badge-danger",
   };
-  return `<span class="badge ${cls[status] || 'badge-info'}">${esc(status || "—")}</span>`;
+  const label = STATUS_LABEL[status] || status || "—";
+  return `<span class="badge ${cls[status] || 'badge-info'}">${esc(label)}</span>`;
 }
 
 function getParty(contract, roleCode) {
   if (!contract.party) return null;
   const p = contract.party.find(p => p.role && p.role[0] && p.role[0].coding && p.role[0].coding[0] && p.role[0].coding[0].code === roleCode);
   if (!p || !p.reference || !p.reference[0]) return null;
-  return p.reference[0].display || p.reference[0].reference || "—";
+  const orgRef = p.reference.find(r => r.reference && r.reference.startsWith("Organization/"));
+  return orgRef ? (orgRef.display || orgRef.reference) : (p.reference[0].display || p.reference[0].reference || "—");
 }
 
 function getTopics(contract) {
   if (!contract.topic || !contract.topic.length) return [];
   return contract.topic.map(t => t.display || t.reference || "—");
+}
+function getTopicRefs(contract) {
+  if (!contract.topic || !contract.topic.length) return [];
+  return contract.topic.map(t => t.reference || "");
+}
+function getPartyOrgRef(contract, roleCode) {
+  if (!contract.party) return null;
+  const p = contract.party.find(p => p.role?.[0]?.coding?.[0]?.code === roleCode);
+  if (!p?.reference) return null;
+  const orgRef = p.reference.find(r => r.reference && r.reference.startsWith("Organization/"));
+  return orgRef ? orgRef.reference : null;
 }
 function getTopic(contract) {
   const t = getTopics(contract);
@@ -547,13 +646,21 @@ function renderDetail(guid) {
 function renderDetailContent(c) {
   const requester = getParty(c, "payer") || "—";
   const provider = getParty(c, "provider") || "—";
+  const requesterRef = getPartyOrgRef(c, "payer");
+  const providerRef = getPartyOrgRef(c, "provider");
   const topics = getTopics(c);
-  const topicsHtml = topics.length ? topics.map(t => `<span class="badge badge-info" style="margin-right:0.3rem;margin-bottom:0.2rem">${esc(t)}</span>`).join("") : "—";
+  const topicRefs = getTopicRefs(c);
+  const topicsHtml = topics.length
+    ? topics.map((t, i) => `<div style="margin-bottom:0.3rem"><span class="badge badge-info">${esc(t)}</span>${topicRefs[i] ? ` <code style="font-size:0.8em;color:var(--text-muted)">${esc(topicRefs[i])}</code>` : ""}</div>`).join("")
+    : "—";
+  const refLine = ref => ref ? `<div><code style="font-size:0.8em;color:var(--text-muted)">${esc(ref)}</code></div>` : "";
   return `<h2>${esc(c.title || c.name || "Contract")}</h2>
     <div class="detail-grid" style="margin-top:0.75rem">
-      <div class="detail-label">Status</div><div class="detail-value">${statusBadge(c.status)}</div>
-      <div class="detail-label">Requester</div><div class="detail-value">${esc(requester)}</div>
-      <div class="detail-label">Provider</div><div class="detail-value">${esc(provider)}</div>
+      <div class="detail-label">Status</div><div class="detail-value">${statusBadge(c.status)}${c.status !== 'executed' ? ' <span style="font-size:0.85em;color:var(--text-muted);margin-left:0.5rem;">Contract must be <strong>Active</strong> to be valid for requests</span>' : ''}</div>
+      <div class="detail-label">Requester</div><div class="detail-value">${esc(requester)}${refLine(requesterRef)}</div>
+      <div class="detail-label">Provider</div><div class="detail-value">${esc(provider)}${refLine(providerRef)}</div>
+      <div class="detail-label">Contact (Req)</div><div class="detail-value">${esc(getPartyPerson(c, "payer") || "To whom it may concern")}</div>
+      <div class="detail-label">Contact (Prov)</div><div class="detail-value">${esc(getPartyPerson(c, "provider") || "To whom it may concern")}</div>
       <div class="detail-label">Services</div><div class="detail-value">${topicsHtml}</div>
       <div class="detail-label">Period</div><div class="detail-value">${fmtDate(c.period?.start)} — ${fmtDate(c.period?.end)}</div>
       <div class="detail-label">Issued</div><div class="detail-value">${fmtDate(c.issued)}</div>
@@ -576,7 +683,28 @@ function renderEditor(guid) {
     <div class="form-row">
       <div class="form-group"><label for="ed-name">Name</label><input id="ed-name" class="form-control" placeholder="machine-name"></div>
       <div class="form-group"><label for="ed-status">Status</label>
-        <select id="ed-status" class="form-control">${STATUSES.map(s => `<option value="${s}"${s === "offered" ? " selected" : ""}>${s}</option>`).join("")}</select>
+        <select id="ed-status" class="form-control">${STATUS_OPTIONS.map(o => `<option value="${o.code}"${o.code === "negotiable" ? " selected" : ""}>${o.label}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label style="display:block;margin-bottom:0.4rem;">Compliance &amp; provider data</label>
+      <div style="display:flex;flex-wrap:wrap;gap:1.25rem;align-items:flex-start;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:5px;background:var(--card-bg);">
+        <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:normal;">
+          <input type="checkbox" id="ed-legally-ok"> Legally OK
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:normal;">
+          <input type="checkbox" id="ed-pub-exists"> PUB exists
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:normal;">
+          <input type="checkbox" id="ed-legal-provider"> Legal Provider
+        </label>
+        <div style="display:inline-flex;align-items:center;gap:0.6rem;font-weight:normal;">
+          <span style="color:var(--text-muted);">Provider data status:</span>
+          ${PROVIDER_DATA_OPTIONS.map(o => `
+            <label style="display:inline-flex;align-items:center;gap:0.3rem;">
+              <input type="radio" name="ed-provider-data-status" value="${o.code}"${o.code === "unclear" ? " checked" : ""}> ${o.label}
+            </label>`).join("")}
+        </div>
       </div>
     </div>
     <div class="form-row">
@@ -587,9 +715,22 @@ function renderEditor(guid) {
         <select id="ed-provider" class="form-control"><option value="">Loading organisations...</option></select>
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label for="ed-payer-person">Contact Person (Requester)</label>
+        <select id="ed-payer-person" class="form-control"><option value="">To whom it may concern</option></select>
+      </div>
+      <div class="form-group"><label for="ed-provider-person">Contact Person (Provider)</label>
+        <select id="ed-provider-person" class="form-control"><option value="">To whom it may concern</option></select>
+      </div>
+    </div>
     <div class="form-group"><label>Contracted Services (PlanDefinitions)</label>
       <div id="ed-plandefs" style="border:1px solid var(--border);border-radius:5px;padding:0.5rem;max-height:200px;overflow-y:auto;background:var(--card-bg)">
         <div class="text-muted">Loading plan definitions...</div>
+      </div>
+    </div>
+    <div class="form-group"><label>Allowed Observation Concepts <span style="font-weight:normal;color:var(--text-muted)">(in addition to those in the contracted PlanDefinitions — providers can only report concepts in the union of PlanDefinition concepts and these)</span></label>
+      <div id="ed-concepts" style="border:1px solid var(--border);border-radius:5px;padding:0.5rem;max-height:200px;overflow-y:auto;background:var(--card-bg)">
+        <div class="text-muted">Loading concepts...</div>
       </div>
     </div>
     <div class="form-row-3">
@@ -616,9 +757,15 @@ function populateSelect(id, items, valueFn, labelFn, placeholder) {
 
 async function bindEditor(guid) {
   // Load external data
-  const [orgs, pds] = await Promise.all([loadOrganisations(), loadPlanDefinitions()]);
+  const [orgs, pds, concepts] = await Promise.all([loadOrganisations(), loadPlanDefinitions(), loadConcepts()]);
   populateSelect("ed-payer", orgs, o => o.organisation_guid, o => o.name, "— Select Requesting Org —");
   populateSelect("ed-provider", orgs, o => o.organisation_guid, o => o.name, "— Select Provider Org —");
+
+  // Wire org→person loading
+  const payerSel = document.getElementById("ed-payer");
+  const provSel = document.getElementById("ed-provider");
+  if (payerSel) payerSel.addEventListener("change", () => loadOrgMembers(payerSel.value, "ed-payer-person"));
+  if (provSel) provSel.addEventListener("change", () => loadOrgMembers(provSel.value, "ed-provider-person"));
 
   // Populate PlanDefinition checkboxes
   const pdContainer = document.getElementById("ed-plandefs");
@@ -636,6 +783,22 @@ async function bindEditor(guid) {
     }
   }
 
+  // Populate Concept checkboxes (allowed observation concepts)
+  const conContainer = document.getElementById("ed-concepts");
+  if (conContainer) {
+    if (!concepts.length) {
+      conContainer.innerHTML = '<div class="text-muted">No concepts available</div>';
+    } else {
+      conContainer.innerHTML = concepts.map(c => {
+        const id = c.guid;
+        const label = (c.concept_name || c.concept_display_text || id) + (c.unit ? "" : "");
+        return `<label style="display:flex;align-items:center;gap:0.4rem;padding:0.2rem 0;cursor:pointer">
+          <input type="checkbox" class="concept-check" value="${esc(id)}" data-display="${esc(label)}"> ${esc(label)}
+        </label>`;
+      }).join("");
+    }
+  }
+
   // If editing, load existing contract
   if (guid) {
     const r = await api("/fhir/Contract/" + guid);
@@ -645,21 +808,54 @@ async function bindEditor(guid) {
     if (c.title) $("ed-title").value = c.title;
     if (c.name) $("ed-name").value = c.name;
     if (c.status) $("ed-status").value = c.status;
+    // Compliance + provider-data extensions
+    $("ed-legally-ok").checked     = !!extGet(c, EXT_LEGALLY_OK);
+    $("ed-pub-exists").checked     = !!extGet(c, EXT_PUB_EXISTS);
+    $("ed-legal-provider").checked = !!extGet(c, EXT_LEGAL_PROVIDER);
+    const pdsCurrent = extGet(c, EXT_PROVIDER_DATA) || "unclear";
+    const pdsRadio = document.querySelector(`input[name="ed-provider-data-status"][value="${pdsCurrent}"]`);
+    if (pdsRadio) pdsRadio.checked = true;
     if (c.period?.start) $("ed-start").value = c.period.start.slice(0, 10);
     if (c.period?.end) $("ed-end").value = c.period.end.slice(0, 10);
     if (c.issued) $("ed-issued").value = c.issued.slice(0, 10);
     if (c.note) $("ed-note").value = c.note;
-    // Set party pickers
+    // Set party pickers + person pickers
     const payerRef = getPartyRef(c, "payer");
     const provRef = getPartyRef(c, "provider");
-    if (payerRef) $("ed-payer").value = payerRef;
-    if (provRef) $("ed-provider").value = provRef;
+    if (payerRef) {
+      $("ed-payer").value = payerRef;
+      await loadOrgMembers(payerRef, "ed-payer-person");
+      const payerPerson = getPartyPersonRef(c, "payer");
+      if (payerPerson) $("ed-payer-person").value = payerPerson;
+    }
+    if (provRef) {
+      $("ed-provider").value = provRef;
+      await loadOrgMembers(provRef, "ed-provider-person");
+      const provPerson = getPartyPersonRef(c, "provider");
+      if (provPerson) $("ed-provider-person").value = provPerson;
+    }
     // Set topic checkboxes
     if (c.topic && c.topic.length) {
       const selectedIds = c.topic.map(t => t.reference ? t.reference.split("/").pop() : "");
       document.querySelectorAll(".pd-check").forEach(cb => {
         if (selectedIds.includes(cb.value)) cb.checked = true;
       });
+    }
+    // Pre-check allowed concept boxes from term[] return_scope/optional_return
+    if (Array.isArray(c.term)) {
+      const returnTerm = c.term.find(t => (t.type && t.type.text) === "return_scope");
+      if (returnTerm && Array.isArray(returnTerm.asset)) {
+        const guids = new Set();
+        returnTerm.asset.forEach(a => {
+          (a.typeReference || []).forEach(r => {
+            const m = (r.reference || "").match(/\/concepts\/([0-9a-f-]{36})$/i);
+            if (m) guids.add(m[1]);
+          });
+        });
+        document.querySelectorAll(".concept-check").forEach(cb => {
+          if (guids.has(cb.value)) cb.checked = true;
+        });
+      }
     }
   }
 
@@ -688,12 +884,39 @@ function getPartyRef(contract, roleCode) {
   return p.reference[0].reference.split("/").pop();
 }
 
+function getPartyPerson(contract, roleCode) {
+  if (!contract.party) return null;
+  const p = contract.party.find(p => p.role?.[0]?.coding?.[0]?.code === roleCode);
+  if (!p?.reference) return null;
+  const practRef = p.reference.find(r => r.reference && r.reference.startsWith("Practitioner/"));
+  return practRef ? (practRef.display || null) : null;
+}
+
+function getPartyPersonRef(contract, roleCode) {
+  if (!contract.party) return null;
+  const p = contract.party.find(p => p.role?.[0]?.coding?.[0]?.code === roleCode);
+  if (!p?.reference) return null;
+  const practRef = p.reference.find(r => r.reference && r.reference.startsWith("Practitioner/"));
+  if (!practRef) return null;
+  return practRef.reference.split("/").pop();
+}
+
 function buildContract() {
   const $ = id => document.getElementById(id)?.value?.trim() || "";
   const status = $("ed-status");
   if (!status) { toast("Status is required", "error"); return null; }
 
   const contract = { resourceType: "Contract", status };
+
+  // Compliance + provider-data, persisted as Contract.extension[] so they
+  // travel with the JSON across servers (FHIR-portable).
+  const checked = id => !!document.getElementById(id)?.checked;
+  extSet(contract, EXT_LEGALLY_OK,    checked("ed-legally-ok")     || null, "valueBoolean");
+  extSet(contract, EXT_PUB_EXISTS,    checked("ed-pub-exists")     || null, "valueBoolean");
+  extSet(contract, EXT_LEGAL_PROVIDER,checked("ed-legal-provider") || null, "valueBoolean");
+  const pds = document.querySelector('input[name="ed-provider-data-status"]:checked')?.value;
+  // We always persist the provider-data status; default "unclear" if nothing checked.
+  extSet(contract, EXT_PROVIDER_DATA, pds || "unclear", "valueCode");
 
   const title = $("ed-title"); if (title) contract.title = title;
   const name = $("ed-name"); if (name) contract.name = name;
@@ -708,21 +931,34 @@ function buildContract() {
   const issued = $("ed-issued");
   if (issued) contract.issued = issued + "T00:00:00Z";
 
-  // Party
+  // Party (org + optional person)
   const payerGuid = $("ed-payer"), provGuid = $("ed-provider");
+  const payerPersonGuid = $("ed-payer-person"), provPersonGuid = $("ed-provider-person");
   const parties = [];
   if (payerGuid) {
     const org = state.organisations.find(o => o.organisation_guid === payerGuid);
+    const refs = [{ reference: "Organization/" + payerGuid, display: org ? org.name : "" }];
+    if (payerPersonGuid) {
+      const personSel = document.getElementById("ed-payer-person");
+      const personOpt = personSel ? personSel.selectedOptions[0] : null;
+      refs.push({ reference: "Practitioner/" + payerPersonGuid, display: personOpt?.dataset?.display || "" });
+    }
     parties.push({
       role: [{ coding: [{ system: "http://hl7.org/fhir/contract-party-role", code: "payer", display: "Payer" }] }],
-      reference: [{ reference: "Organization/" + payerGuid, display: org ? org.name : "" }]
+      reference: refs
     });
   }
   if (provGuid) {
     const org = state.organisations.find(o => o.organisation_guid === provGuid);
+    const refs = [{ reference: "Organization/" + provGuid, display: org ? org.name : "" }];
+    if (provPersonGuid) {
+      const personSel = document.getElementById("ed-provider-person");
+      const personOpt = personSel ? personSel.selectedOptions[0] : null;
+      refs.push({ reference: "Practitioner/" + provPersonGuid, display: personOpt?.dataset?.display || "" });
+    }
     parties.push({
       role: [{ coding: [{ system: "http://hl7.org/fhir/contract-party-role", code: "provider", display: "Provider" }] }],
-      reference: [{ reference: "Organization/" + provGuid, display: org ? org.name : "" }]
+      reference: refs
     });
   }
   if (parties.length) contract.party = parties;
@@ -734,6 +970,26 @@ function buildContract() {
       reference: "PlanDefinition/" + cb.value,
       display: cb.dataset.display || cb.value,
     }));
+  }
+
+  // Allowed observation concepts → term[] return_scope / optional_return
+  const checkedConcepts = document.querySelectorAll(".concept-check:checked");
+  if (checkedConcepts.length) {
+    const conceptBase = PLAN_URL + "/api/v1/concepts/";
+    contract.term = contract.term || [];
+    // Drop any existing return_scope term and replace
+    contract.term = contract.term.filter(t => (t.type && t.type.text) !== "return_scope");
+    contract.term.push({
+      type: { text: "return_scope" },
+      offer: { text: "Observation concepts the provider is permitted to report under this contract." },
+      asset: [{
+        type: [{ text: "optional_return" }],
+        typeReference: Array.from(checkedConcepts).map(cb => ({
+          reference: conceptBase + cb.value,
+          display: cb.dataset.display || cb.value,
+        })),
+      }],
+    });
   }
 
   // Comments

@@ -56,6 +56,14 @@ Each service runs independently on its own port range and Docker Compose project
 
 All ports are within the 9020–9030 range as required by project rules.
 
+### 2.3 Service-to-service consumers
+
+The Contract Manager exposes an **internal API** consumed by other PDHC services:
+
+- **gateway.pdhc** — calls `GET /internal/contract/{guid}/scope` to fetch contract return scope for observation validation. Authenticated via `X-Service-Key` header (shared secret in `INTERNAL_SERVICE_KEY` env var, validated with `hmac.compare_digest`).
+
+This internal layer is separate from the public FHIR API and admin JWT endpoints.
+
 ---
 
 ## 3) Data flows
@@ -108,6 +116,17 @@ SPA JS → POST localhost:9021/fhir/Contract (Bearer token) → Flask validates 
 | **`fhir_contract`** | `JSON` | Not null, stores the full FHIR R5 Contract resource |
 | **`created_at`** | `TIMESTAMPTZ` | Not null, auto-set to UTC now |
 | **`updated_at`** | `TIMESTAMPTZ` | Not null, auto-updated on modification |
+
+The `fhir_contract` JSON includes the full FHIR R5 Contract shape plus four PDHC-defined extensions (kept inside `Contract.extension[]` so the JSON stays portable across FHIR servers — they ride along with the contract record without needing a platform-specific column):
+
+| Extension URL                                                                | Type        | Purpose |
+|------------------------------------------------------------------------------|-------------|---------|
+| `https://contract.pdhc.se/StructureDefinition/legally-ok`                    | bool        | Operator has signed off on legal terms |
+| `https://contract.pdhc.se/StructureDefinition/pub-exists`                    | bool        | A personuppgiftsbiträdesavtal (data-processor agreement) exists |
+| `https://contract.pdhc.se/StructureDefinition/legal-provider`                | bool        | Provider is a legally registered entity |
+| `https://contract.pdhc.se/StructureDefinition/provider-data-status`          | code        | `ok` / `deficient` / `unclear` — provider-data verification verdict |
+
+The status field of `Contract.status` is constrained at the UI layer to four FHIR R5 codes — `negotiable` (Under consideration), `executed` (Active — only this state qualifies the contract as a basis for fulfilling requests), `terminated` (Expired), `revoked` (Revoked). Other FHIR codes are accepted via direct API for compatibility with externally authored Contracts.
 
 ### 4.3 GUID rules
 

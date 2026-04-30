@@ -101,22 +101,55 @@ Deactivated users cannot log in. Existing tokens will still pass JWT validation 
 POST /fhir/Contract
 {
   "resourceType": "Contract",
-  "status": "executable",
+  "status": "negotiable",
   "period": {
     "start": "2026-01-01T00:00:00Z",
     "end": "2026-12-31T23:59:59Z"
   },
   "subject": [
     {"reference": "Organization/abc-123"}
+  ],
+  "extension": [
+    { "url": "https://contract.pdhc.se/StructureDefinition/legally-ok",            "valueBoolean": false },
+    { "url": "https://contract.pdhc.se/StructureDefinition/pub-exists",            "valueBoolean": false },
+    { "url": "https://contract.pdhc.se/StructureDefinition/legal-provider",        "valueBoolean": false },
+    { "url": "https://contract.pdhc.se/StructureDefinition/provider-data-status",  "valueCode":    "unclear" }
   ]
 }
 ```
 
 - **`resourceType`** must be `"Contract"` (required)
-- **`status`** must be a valid FHIR R5 contract status (required)
+- **`status`** must be one of the four supported FHIR R5 codes (required) — see §3.1.1
 - **`period.start`** and **`period.end`** must be ISO-8601 datetime strings (optional)
 - **`subject`** references must use `"ResourceType/id"` format (optional)
+- **`extension[]`** carries the four platform-specific compliance fields — see §3.1.2
 - A GUID is auto-generated if `id` is not provided
+
+#### 3.1.1 Status — supported codes
+
+The platform constrains `Contract.status` to four FHIR R5 codes. Other FHIR codes are still accepted at the API layer (the persisted JSON validates against any FHIR-aware tool), but the admin UI only emits these four:
+
+| UI label              | FHIR code     | Meaning |
+|-----------------------|---------------|---------|
+| Under consideration   | `negotiable`  | Drafting / under negotiation. Contract is not yet a basis for fulfilling requests. |
+| **Active**            | `executed`    | **Only this state qualifies a contract for fulfilling requests.** All other states cause request submission to be rejected. |
+| Expired              | `terminated`  | Period elapsed; archived. |
+| Revoked              | `revoked`     | Cancelled. Irreversible at the platform layer. |
+
+The UI label "Active" wraps the FHIR code `executed` because the FHIR spelling is awkward to non-implementers; the underlying JSON remains FHIR-canonical.
+
+#### 3.1.2 Compliance + provider-data extensions
+
+Four FHIR `Contract.extension[]` entries capture platform-side governance state. They travel with the JSON across servers (no platform-specific column needed) and are FHIR-portable.
+
+| Extension URL                                                                | Type           | Default | UI |
+|------------------------------------------------------------------------------|----------------|---------|----|
+| `https://contract.pdhc.se/StructureDefinition/legally-ok`                    | `valueBoolean` | `false` | Checkbox **Legally OK** |
+| `https://contract.pdhc.se/StructureDefinition/pub-exists`                    | `valueBoolean` | `false` | Checkbox **PUB exists** (PUB = personuppgiftsbiträdesavtal / data-processor agreement) |
+| `https://contract.pdhc.se/StructureDefinition/legal-provider`                | `valueBoolean` | `false` | Checkbox **Legal Provider** |
+| `https://contract.pdhc.se/StructureDefinition/provider-data-status`          | `valueCode`    | `unclear` | Radio: `ok` / `deficient` / `unclear` |
+
+All four are operator-managed metadata; none currently affect the request-fulfillment gate (which depends only on `status == executed`). They exist for governance, audit, and partner onboarding workflows.
 
 ### 3.2 Editing contracts
 

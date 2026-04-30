@@ -2,6 +2,7 @@
 
 List all edited files (full path), newest first.
 
+- `app/docker-compose.yml` — Ticket #72: pinned host interface `127.0.0.1:` on 9020/9021/9022 so DB/api/web ports are localhost-only (were binding to `0.0.0.0`, exposed on LAN via colima ssh-mux forwarder → CLAUDE.md §3 violation). Deployed + containers recreated on macmini 2026-04-16; `curl http://192.168.1.154:902x/` now refuses, `https://contract.pdhc.se/health` continues 200.
 - `app/web/dist/index.html` — full SPA rebuild (dashboard, contract CRUD, user mgmt, routing)
 - `app/backend/app/main.py` — added CORS, user update/deactivate/reset-password endpoints
 - `app/backend/requirements.txt` — added flask-cors
@@ -47,4 +48,25 @@ List all edited files (full path), newest first.
 - `/Users/martiningvar/T7_sidewinder/Contracts/changed_files.md`
 - `/Users/martiningvar/T7_sidewinder/Contracts/progress.md`
 - `/Users/martiningvar/T7_sidewinder/Contracts/readme.md`
+- `app/backend/app/config.py` — 2026-04-05 — added REQUEST_BASE_URL for auto-provision
+- `app/backend/app/main.py` — 2026-04-05 — added _auto_provision_pat hook on contract create/update
 
+## 2026-04-15 — Health endpoint standardisation (ticket #40)
+
+| File | Change |
+|------|--------|
+| `app/backend/app/main.py` | `/health` upgraded to CLAUDE.md §10 shape: returns `{status, database, service}` with HTTP 200/503 based on a live `SELECT 1` via `db_session()`. Adds `Access-Control-Allow-Origin: *` and `Cache-Control: no-store`. |
+| `miserver:contract-api-1:/srv/app/main.py` | Replaced via `docker cp` + `docker restart contract-api-1`. Pre-change file backed up at `/tmp/contract_main_backup_<stamp>.py` on server. |
+| `app/backend/app/main.py` | Ticket #55 — `sso_callback()` now refuses to mint a local JWT when the freshly validated blob has `must_change_password=True`; instead returns `redirect({SSO_BASE_URL}/change-password)`. Once SSO clears the flag, a second SSO login lands here with it off and minting proceeds. Deployed to `/usr/local/www/contract.pdhc/app/backend/app/main.py`; backup `.bak-2026-04-15T18-51-19Z` on server. Rebuilt via `docker-compose up -d --build api` in `/usr/local/www/contract.pdhc/app`; `https://contract.pdhc.se/health` returns 200. |
+| `app/web/dist/index.html` | Ticket #55 — central `api()` wrapper's 401 handler previously cleared local auth and navigated to `#/login` (a sign-in button page). Now clears auth, shows a "Session expired — redirecting to sign-in" toast, and `window.location.assign(API + "/api/v1/auth/login")` immediately. So when SSO flushes a user's session (SSO #44), the next /api/ call in the SPA auto-bounces through the SSO handshake instead of stranding the user on a disabled page. Deployed via rebuild of `contract-web` container (nginx image COPIES `dist/` at build time). Verified over the wire: `curl -s https://contract.pdhc.se/ | grep redirecting` hits. |
+| `app/backend/app/main.py` | Ticket #70 / CLAUDE.md §10: tightened CORS on `/health` from `Access-Control-Allow-Origin: *` to `https://www.pdhc.se`, added `Access-Control-Allow-Methods: GET` and `Vary: Origin`. Contract runs via docker-compose with a baked image; `start.sh` rebuilds via `docker compose up -d --build` so the change takes effect on restart. Verified: all three headers present, body `{"database":"connected","service":"contract.pdhc","status":"ok"}`, image's `/srv/app/main.py` contains the new code. Server backup at `/tmp/contract_main.py.bak.20260416T185418Z`. Side note, not fixed this session: host-side ports `*:9020/21/22` are LAN-exposed via colima ssh-mux (CLAUDE.md §3 concern — compose port map lacks `127.0.0.1:` prefix). |
+
+## 2026-04-30 — Contract.status enum reduction + governance extensions
+
+| File | Change |
+|------|--------|
+| `app/web/dist/index.html` | `STATUSES` array trimmed from 14 FHIR R5 codes to a 4-entry `STATUS_OPTIONS` map: `negotiable` (UI: "Under consideration"), `executed` (UI: "Active" — only state that gates request fulfilment), `terminated` ("Expired"), `revoked` ("Revoked"). Status badge map / detail-view tooltip / edit-form `<select>` all updated. Added a "Compliance & provider data" form block: 3 checkboxes (Legally OK / PUB exists / Legal Provider) + 1 radio (Provider data status: ok/deficient/unclear). Persisted as FHIR `Contract.extension[]` with canonical URLs `https://contract.pdhc.se/StructureDefinition/{legally-ok,pub-exists,legal-provider,provider-data-status}` so the JSON travels portably across FHIR servers. Deployed via `docker cp` to `contract-web-1:/usr/share/nginx/html/index.html`. |
+| `app/docs/admin-manual.md` | New §3.1.1 Status (FHIR-code-to-UI-label mapping), §3.1.2 Compliance + provider-data extensions table. |
+| `app/docs/api.md` | Example payloads use `executed` for active or `negotiable` for new contracts. Status table + extensions table added. Status gate paragraph updated: only `executed` accepts submissions. |
+| `app/docs/architecture.md` | §4.2 expanded to document the four extension URLs + FHIR-portability rationale + the constrained 4-code status set. |
+| miserver bind-mount via `colima ssh -- sudo cp` | All 4 manuals + 3 runbooks copied into `/usr/local/www/contract.pdhc/app/docs/` (VM-side path — host's `/usr/local/www` is not auto-mounted into Colima). All `https://contract.pdhc.se/docs/*.md` URLs now serve the updated content. |
