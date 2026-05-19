@@ -111,7 +111,29 @@ def create_app() -> Flask:
 
     @app.get("/health")
     def health():
-        return jsonify({"status": "ok"})
+        # Shape per CLAUDE.md §10 — matches cgm.pdhc / plan.pdhc.
+        db_ok = False
+        try:
+            with db_session() as s:
+                s.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception:
+            pass
+        status = "ok" if db_ok else "degraded"
+        code = 200 if db_ok else 503
+        resp = jsonify({
+            "status": status,
+            "database": "connected" if db_ok else "unavailable",
+            "service": "contract.pdhc",
+            "version": os.environ.get("APP_VERSION", "dev"),
+        })
+        # Ticket #70 / CLAUDE.md §10: let www.pdhc.se/services.html read the
+        # JSON body cross-origin so it can drive real status/DB dots.
+        resp.headers["Access-Control-Allow-Origin"] = "https://www.pdhc.se"
+        resp.headers["Access-Control-Allow-Methods"] = "GET"
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Cache-Control"] = "no-store"
+        return resp, code
 
     # ── SSO Auth (H1–H4) ─────────────────────────────────────────
 
