@@ -19,6 +19,23 @@ class Config:
     # Rate limit: 100 read requests/hour per IP
     READ_RATE_LIMIT = os.getenv("READ_RATE_LIMIT", "100 per hour")
 
+    # Internal service key — gateway.pdhc uses this to call scope endpoint without SSO
+    INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "")
+
+    # request.pdhc — for auto-provisioning PATs on contract save
+    REQUEST_BASE_URL = os.getenv("REQUEST_BASE_URL", "http://localhost:9060")
+
+    # plan.pdhc — used by scope-concept existence validation (#135).
+    PLAN_BASE_URL = os.getenv("PLAN_BASE_URL", "https://plan.pdhc.se")
+
+    # When True, contract create/update verifies each concept GUID in
+    # term[] actually exists in plan.pdhc. If plan.pdhc is unreachable,
+    # the contract write is refused (503). Set to false during local
+    # dev when plan.pdhc isn't running.
+    STRICT_SCOPE_CONCEPTS = os.getenv(
+        "STRICT_SCOPE_CONCEPTS", "true"
+    ).lower() in ("true", "1", "yes")
+
     # SSO integration
     AUTH_DISABLED = os.getenv("AUTH_DISABLED", "false").lower() in ("true", "1", "yes")
     SSO_BASE_URL = os.getenv("SSO_BASE_URL", "https://sso.pdhc.se")

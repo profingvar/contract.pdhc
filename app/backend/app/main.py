@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hmac
+import logging
 import os
 import secrets
 import time
 from datetime import timedelta
 
+import requests as http_requests
 from flask import Flask, jsonify, redirect, request, session
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt, jwt_required
@@ -15,10 +18,13 @@ from sqlalchemy.exc import OperationalError
 
 from .config import Config
 from .db import make_engine, make_session_factory
-from .fhir import build_capability_statement, ensure_contract_shape
+from .fhir import build_capability_statement, ensure_contract_shape, get_contract_scope
+from .scope_validation import extract_scope_concept_guids, verify_concepts_exist
 from .models import Base, ContractRecord, User
 from .security import hash_password, verify_password
 from .sso import get_sso_login_url, validate_token
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> Flask:
@@ -84,6 +90,20 @@ def create_app() -> Flask:
 
         return decorator
 
+    def require_service_key(fn):
+        """Validate X-Service-Key header for internal service-to-service calls."""
+        def wrapper(*args, **kwargs):
+            key = app.config.get("INTERNAL_SERVICE_KEY")
+            if not key:
+                # Not configured → reject all. No details leaked.
+                return jsonify({"error": "unauthorized"}), 401
+            provided = request.headers.get("X-Service-Key", "")
+            if not provided or not hmac.compare_digest(provided, key):
+                return jsonify({"error": "unauthorized"}), 401
+            return fn(*args, **kwargs)
+        wrapper.__name__ = fn.__name__
+        return wrapper
+
     def seed_admin_if_needed():
         if not app.config.get("AUTH_DISABLED"):
             return
@@ -107,6 +127,114 @@ def create_app() -> Flask:
 
     seed_admin_if_needed()
 
+    # ── Party extraction helper (used by internal scope endpoint) ──
+
+    def _extract_contract_parties(contract_resource):
+        """Pull requesting + provider org guids out of FHIR Contract.party[].
+
+        Role conventions (matches contract.pdhc UI):
+          payer    → requesting/ordering organisation
+          provider → fulfilling organisation
+        """
+        requesting = None
+        providers: list[str] = []
+        for party in contract_resource.get("party", []) or []:
+            role_codes = []
+            for role in party.get("role", []) or []:
+                for c in role.get("coding", []) or []:
+                    if c.get("code"):
+                        role_codes.append(c["code"])
+            if not role_codes:
+                continue
+            org_guids = []
+            for ref in party.get("reference", []) or []:
+                ref_str = (ref or {}).get("reference", "")
+                if ref_str.startswith("Organization/"):
+                    org_guids.append(ref_str.split("/", 1)[1])
+            if "payer" in role_codes and org_guids and requesting is None:
+                requesting = org_guids[0]
+            if "provider" in role_codes:
+                providers.extend(org_guids)
+        return {
+            "requesting_org_guid": requesting,
+            "provider_org_guids": providers,
+        }
+
+    # ── Auto-provision PAT helper ────────────────────────────────
+
+    def _validate_scope_concepts(resource):
+        """Verify every concept referenced in term[] exists in plan.pdhc.
+
+        Returns a Flask response tuple on rejection, or None to proceed
+        (#135). When STRICT_SCOPE_CONCEPTS is false, a plan.pdhc outage
+        falls through to None — useful for local dev where plan isn't
+        running. Audit logs the verdict either way.
+        """
+        guids = extract_scope_concept_guids(resource)
+        ok, info = verify_concepts_exist(guids)
+        app.logger.info(
+            'contract scope concept validation: contract_id=%s guids=%d ok=%s info=%s',
+            resource.get('id', '?'), len(guids), ok, info,
+        )
+        if ok:
+            return None
+        if info.get('missing'):
+            return jsonify({
+                'error': 'scope_concept_missing',
+                'message': "One or more concept GUIDs in term[] do not exist in plan.pdhc",
+                'missing_concept_guids': info['missing'],
+            }), 422
+        return jsonify({
+            'error': 'scope_validation_unavailable',
+            'message': 'plan.pdhc unreachable; cannot verify scope concepts',
+            'detail': info.get('detail'),
+        }), 503
+
+    def _auto_provision_pat(contract_resource):
+        """Extract provider org from contract party[] and ask request.pdhc to auto-provision a PAT."""
+        request_base = app.config.get("REQUEST_BASE_URL", "").rstrip("/")
+        service_key = app.config.get("INTERNAL_SERVICE_KEY", "")
+        if not request_base or not service_key:
+            return
+
+        contract_guid = contract_resource.get("id", "")
+        status = contract_resource.get("status", "")
+        if status not in ("executed", "executable", "offered", "renewed"):
+            return
+
+        # Find provider org GUIDs from party[] with role "provider"
+        for party in contract_resource.get("party", []):
+            role_codings = []
+            for role in party.get("role", []):
+                role_codings.extend(role.get("coding", []))
+            is_provider = any(c.get("code") == "provider" for c in role_codings)
+            if not is_provider:
+                continue
+
+            for ref in party.get("reference", []):
+                ref_str = ref.get("reference", "")
+                if ref_str.startswith("Organization/"):
+                    provider_org_guid = ref_str.split("/", 1)[1]
+                    try:
+                        resp = http_requests.post(
+                            f"{request_base}/api/v1/internal/auto-provision-pat",
+                            json={
+                                "provider_org_guid": provider_org_guid,
+                                "contract_guid": contract_guid,
+                            },
+                            headers={"X-Service-Key": service_key},
+                            timeout=10,
+                        )
+                        logger.info(
+                            "Auto-provision PAT for org=%s contract=%s → %s",
+                            provider_org_guid, contract_guid, resp.status_code,
+                        )
+                    except http_requests.RequestException as e:
+                        logger.warning(
+                            "Failed to auto-provision PAT for org=%s: %s",
+                            provider_org_guid, e,
+                        )
+
     # ── Health ────────────────────────────────────────────────────
 
     @app.get("/health")
@@ -128,7 +256,9 @@ def create_app() -> Flask:
             "version": os.environ.get("APP_VERSION", "dev"),
         })
         # Ticket #70 / CLAUDE.md §10: let www.pdhc.se/services.html read the
-        # JSON body cross-origin so it can drive real status/DB dots.
+        # JSON body cross-origin so it can drive real status/DB dots. Specific
+        # origin + Vary: Origin (not "*") keeps future Allow-Credentials
+        # spec-compliant.
         resp.headers["Access-Control-Allow-Origin"] = "https://www.pdhc.se"
         resp.headers["Access-Control-Allow-Methods"] = "GET"
         resp.headers["Vary"] = "Origin"
@@ -172,6 +302,14 @@ def create_app() -> Flask:
         blob = validate_token(token)
         if blob is None:
             return redirect("/?sso_error=Token+validation+failed")
+
+        # Ticket #55 / SSO #43: refuse to mint a local JWT while SSO requires
+        # a password change. Bounce the user to SSO's change-password page;
+        # once cleared there, a second SSO login will land here with the
+        # flag off and minting proceeds normally.
+        if blob.get("must_change_password"):
+            sso_base = app.config["SSO_BASE_URL"].rstrip("/")
+            return redirect(f"{sso_base}/change-password")
 
         # Map SSO access blob to local JWT claims
         role = _role_from_blob(blob)
@@ -266,6 +404,93 @@ def create_app() -> Flask:
                 return jsonify({"error": "not_found"}), 404
             return jsonify(row.fhir_contract)
 
+    @app.get("/fhir/Contract/<guid>/scope")
+    @limiter.limit(app.config["READ_RATE_LIMIT"])
+    def get_contract_scope_endpoint(guid: str):
+        """Lightweight scope endpoint — returns concept scope + contract status.
+        Public + rate-limited, or via X-Service-Key (bypasses rate limit on /internal path).
+        """
+        with db_session() as s:
+            row = s.get(ContractRecord, guid)
+            if not row:
+                return jsonify({"error": "not_found"}), 404
+
+            contract = row.fhir_contract
+            status = contract.get("status", "unknown")
+
+            # Revoked/terminated/cancelled contracts → empty scope, all submissions rejected
+            if status in ("revoked", "terminated", "cancelled"):
+                return jsonify({
+                    "contract_guid": guid,
+                    "status": status,
+                    "scope_defined": True,
+                    "request_scope": [],
+                    "return_scope": {"obligatory_return": [], "optional_return": []},
+                })
+
+            scope = get_contract_scope(contract)
+
+            if scope is None:
+                return jsonify({
+                    "contract_guid": guid,
+                    "status": status,
+                    "scope_defined": False,
+                    "request_scope": None,
+                    "return_scope": None,
+                })
+
+            return jsonify({
+                "contract_guid": guid,
+                "status": status,
+                "scope_defined": True,
+                "request_scope": scope.get("request_scope"),
+                "return_scope": scope.get("return_scope"),
+            })
+
+    @app.get("/internal/contract/<guid>/scope")
+    @require_service_key
+    def get_contract_scope_internal(guid: str):
+        """Internal scope endpoint — same logic, X-Service-Key auth, no rate limit."""
+        with db_session() as s:
+            row = s.get(ContractRecord, guid)
+            if not row:
+                return jsonify({"error": "not_found"}), 404
+
+            contract = row.fhir_contract
+            status = contract.get("status", "unknown")
+            parties = _extract_contract_parties(contract)
+
+            if status in ("revoked", "terminated", "cancelled"):
+                return jsonify({
+                    "contract_guid": guid,
+                    "status": status,
+                    "scope_defined": True,
+                    "request_scope": [],
+                    "return_scope": {"obligatory_return": [], "optional_return": []},
+                    "parties": parties,
+                })
+
+            scope = get_contract_scope(contract)
+
+            if scope is None:
+                return jsonify({
+                    "contract_guid": guid,
+                    "status": status,
+                    "scope_defined": False,
+                    "request_scope": None,
+                    "return_scope": None,
+                    "parties": parties,
+                })
+
+            return jsonify({
+                "contract_guid": guid,
+                "status": status,
+                "scope_defined": True,
+                "request_scope": scope.get("request_scope"),
+                "return_scope": scope.get("return_scope"),
+                "parties": parties,
+            })
+
     @app.post("/fhir/Contract")
     @require_role("admin")
     def create_contract():
@@ -275,12 +500,17 @@ def create_app() -> Flask:
         except ValueError as e:
             return jsonify({"error": "validation", "message": str(e)}), 400
 
+        resp = _validate_scope_concepts(resource)
+        if resp is not None:
+            return resp
+
         guid = resource["id"]
         with db_session() as s:
             if s.get(ContractRecord, guid):
                 return jsonify({"error": "conflict", "message": "Contract id already exists"}), 409
             s.add(ContractRecord(guid=guid, fhir_contract=resource))
             s.commit()
+        _auto_provision_pat(resource)
         return jsonify(resource), 201
 
     @app.put("/fhir/Contract/<guid>")
@@ -293,12 +523,17 @@ def create_app() -> Flask:
             return jsonify({"error": "validation", "message": str(e)}), 400
 
         resource["id"] = guid
+        resp = _validate_scope_concepts(resource)
+        if resp is not None:
+            return resp
+
         with db_session() as s:
             row = s.get(ContractRecord, guid)
             if not row:
                 return jsonify({"error": "not_found"}), 404
             row.fhir_contract = resource
             s.commit()
+        _auto_provision_pat(resource)
         return jsonify(resource)
 
     @app.delete("/fhir/Contract/<guid>")
