@@ -22,6 +22,7 @@ from .consent_emitter import (
     revoke_patient_consents,
     _LIFECYCLE_REVOKE_STATUSES,
 )
+from .consent_reconciler import reconcile as reconcile_consents
 from .db import make_engine, make_session_factory
 from .fhir import build_capability_statement, ensure_contract_shape, get_contract_scope
 from .scope_validation import extract_scope_concept_guids, verify_concepts_exist
@@ -695,6 +696,25 @@ def create_app() -> Flask:
             user.password_hash = hash_password(new_password)
             s.commit()
             return jsonify({"ok": True, "guid": user.guid, "username": user.username})
+
+    # ── Reconciler CLI (#243) ─────────────────────────────────────
+    @app.cli.command("reconcile-consents")
+    def _reconcile_consents_cli():  # noqa: D401
+        """Walk every contract in a lifecycle status, re-emit / re-revoke
+        the consents IPS should be holding. Recovers from the silent-drop
+        failure mode documented in consent_emitter.py."""
+        import click as _click
+        with db_session() as s:
+            summary = reconcile_consents(s)
+        _click.echo(
+            "reconcile-consents "
+            f"checked={summary['checked']} "
+            f"grants_re_emitted={summary['grants_re_emitted']} "
+            f"revokes_re_called={summary['revokes_re_called']} "
+            f"grant_attempts={summary['grant_attempts']} "
+            f"revoke_attempts={summary['revoke_attempts']} "
+            f"errors={summary['errors']}"
+        )
 
     return app
 
