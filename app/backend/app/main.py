@@ -17,6 +17,11 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
 from .config import Config
+from .consent_emitter import (
+    emit_patient_consents,
+    revoke_patient_consents,
+    _LIFECYCLE_REVOKE_STATUSES,
+)
 from .db import make_engine, make_session_factory
 from .fhir import build_capability_statement, ensure_contract_shape, get_contract_scope
 from .scope_validation import extract_scope_concept_guids, verify_concepts_exist
@@ -234,6 +239,38 @@ def create_app() -> Flask:
                             "Failed to auto-provision PAT for org=%s: %s",
                             provider_org_guid, e,
                         )
+
+    def _emit_consents_for_lifecycle(contract_resource):
+        """Dispatch to the consent emitter on status change.
+
+        - Active statuses -> emit grants for each patient signer.
+        - End-of-life statuses (cancelled/terminated/revoked) -> revoke
+          any consents that linked back to this contract.
+
+        Best-effort; ips-side failures are logged but never propagate
+        to the contract write."""
+        try:
+            status = (contract_resource.get("status") or "").lower()
+            if status in _LIFECYCLE_REVOKE_STATUSES:
+                summary = revoke_patient_consents(
+                    contract_resource,
+                    reason=f"contract_status:{status}",
+                )
+                logger.info(
+                    "contract consent revoke contract=%s status=%s -> %s",
+                    contract_resource.get("id", "?"), status, summary,
+                )
+            else:
+                summary = emit_patient_consents(contract_resource)
+                logger.info(
+                    "contract consent emit contract=%s status=%s -> %s",
+                    contract_resource.get("id", "?"), status, summary,
+                )
+        except Exception:
+            logger.warning(
+                "consent emitter raised for contract %s",
+                contract_resource.get("id", "?"), exc_info=True,
+            )
 
     # ── Health ────────────────────────────────────────────────────
 
@@ -511,6 +548,7 @@ def create_app() -> Flask:
             s.add(ContractRecord(guid=guid, fhir_contract=resource))
             s.commit()
         _auto_provision_pat(resource)
+        _emit_consents_for_lifecycle(resource)
         return jsonify(resource), 201
 
     @app.put("/fhir/Contract/<guid>")
@@ -534,6 +572,7 @@ def create_app() -> Flask:
             row.fhir_contract = resource
             s.commit()
         _auto_provision_pat(resource)
+        _emit_consents_for_lifecycle(resource)
         return jsonify(resource)
 
     @app.delete("/fhir/Contract/<guid>")
@@ -543,8 +582,21 @@ def create_app() -> Flask:
             row = s.get(ContractRecord, guid)
             if not row:
                 return jsonify({"error": "not_found"}), 404
+            existing_resource = dict(row.fhir_contract or {})
+            existing_resource["id"] = guid
             s.delete(row)
             s.commit()
+        # Best-effort revoke of any auto-emitted consents linked back
+        # to this contract.
+        try:
+            revoke_patient_consents(
+                existing_resource, reason=f"contract_deleted:{guid}",
+            )
+        except Exception:
+            logger.warning(
+                "consent revoke after delete failed for contract %s",
+                guid, exc_info=True,
+            )
         return "", 204
 
     # ── Admin: Users (only available in AUTH_DISABLED mode) ───────

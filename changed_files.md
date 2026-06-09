@@ -70,3 +70,47 @@ List all edited files (full path), newest first.
 | `app/docs/api.md` | Example payloads use `executed` for active or `negotiable` for new contracts. Status table + extensions table added. Status gate paragraph updated: only `executed` accepts submissions. |
 | `app/docs/architecture.md` | §4.2 expanded to document the four extension URLs + FHIR-portability rationale + the constrained 4-code status set. |
 | miserver bind-mount via `colima ssh -- sudo cp` | All 4 manuals + 3 runbooks copied into `/usr/local/www/contract.pdhc/app/docs/` (VM-side path — host's `/usr/local/www` is not auto-mounted into Colima). All `https://contract.pdhc.se/docs/*.md` URLs now serve the updated content. |
+
+## 2026-05-27T08:20:50Z — fix: contract list not refreshing after delete (web)
+- app/web/dist/index.html (deleteContract: force render when hash already #/contracts)
+
+## 2026-06-09T09-XX-XXZ — feat #231: contract emits PatientConsent on patient-signer (Lag 2022:913 §5)
+
+- `app/backend/app/consent_emitter.py` (NEW): pure FHIR parsers
+  (_extract_patient_signers / _extract_provider_org_guids /
+  _extract_expires_at), idempotent IPS HTTP layer (_list_active_consents,
+  _post_grant, _post_revoke), and the lifecycle helpers
+  `emit_patient_consents(contract_resource)` and
+  `revoke_patient_consents(contract_resource, reason=...)`.
+- `app/backend/app/config.py`: new `IPS_BASE_URL` + `IPS_API_KEY` env
+  knobs. Empty IPS_BASE_URL → emitter is a noop (local dev safety).
+- `app/backend/app/main.py`:
+    - Imports the emitter helpers.
+    - New `_emit_consents_for_lifecycle(contract_resource)` dispatcher
+      that emits grants on active statuses
+      (executed/executable/offered/renewed) and revokes on end-of-life
+      statuses (cancelled/terminated/revoked).
+    - POST /fhir/Contract and PUT /fhir/Contract/<guid> call the
+      dispatcher after the DB commit.
+    - DELETE /fhir/Contract/<guid> snapshots the resource before
+      deletion and calls `revoke_patient_consents` with
+      `reason='contract_deleted:<guid>'`.
+    - Best-effort: emitter exceptions are logged but never propagate
+      to the contract write — a flaky IPS must not break contract CRUD.
+- `app/backend/tests/test_consent_emitter.py` (NEW, 20 tests):
+    - Parsing (7): patient signers single / list form / dedup /
+      ignore-non-patients; provider orgs; expires_at present / missing.
+    - Service (8): active contract posts grant + verifies body shape;
+      multi-signer x multi-grantee cross-product; idempotent against
+      existing consent; 409 from IPS treated as success; inactive
+      status noop; no patient signer noop; no provider org noop;
+      revoke matching contract_guid (and only that one); no match noop.
+    - Route integration (4): POST executed → emits; PUT to cancelled
+      → revokes; DELETE → revokes; re-PUT same contract is idempotent.
+- ips.pdhc/gateway/app/models/patient_consent.py:
+    - Added `'contract'` to `CONSENT_GRANTED_VIA` so the auto-emit
+      channel is a distinct enum value (was: portal / in_person /
+      paper / phone / other).
+
+Tests: 70/70 contract.pdhc green (was 50/50). 229/229 ips.pdhc still
+green after the enum addition.

@@ -25,6 +25,13 @@ class Config:
     # request.pdhc — for auto-provisioning PATs on contract save
     REQUEST_BASE_URL = os.getenv("REQUEST_BASE_URL", "http://localhost:9060")
 
+    # ips.pdhc — for auto-emitting PatientConsent when a contract is
+    # signed by a patient (#231). Empty -> consent emission is a noop
+    # (local dev / standalone install). IPS_API_KEY is optional; when
+    # absent the emitter falls back to INTERNAL_SERVICE_KEY.
+    IPS_BASE_URL = os.getenv("IPS_BASE_URL", "")
+    IPS_API_KEY = os.getenv("IPS_API_KEY", "")
+
     # plan.pdhc — used by scope-concept existence validation (#135).
     PLAN_BASE_URL = os.getenv("PLAN_BASE_URL", "https://plan.pdhc.se")
 
