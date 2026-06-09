@@ -46,6 +46,9 @@ def _set_env(monkeypatch):
     # Don't fail the contract write because plan.pdhc isn't reachable
     # from the test harness.
     monkeypatch.setenv("STRICT_SCOPE_CONCEPTS", "false")
+    # #230: signer resolution would try to reach IPS — these tests
+    # focus on the emitter, not the resolver.
+    monkeypatch.setenv("STRICT_SIGNER_VALIDATION", "false")
 
 
 @pytest.fixture()
@@ -226,8 +229,20 @@ def _signed_contract(
             "start": "2026-01-01T00:00:00Z",
             "end": period_end,
         },
+        # Well-shaped signers per #230: type + party + non-empty
+        # signature[].data.
         "signer": [
-            {"party": {"reference": f"Patient/{p}"}} for p in patients
+            {
+                "type": {"coding": [{"code": "SELF"}]},
+                "party": {"reference": f"Patient/{p}"},
+                "signature": [{
+                    "type": [{"code": "1.2.840.10065.1.12.1.1"}],
+                    "when": "2026-06-09T10:00:00Z",
+                    "who": {"reference": f"Patient/{p}"},
+                    "data": "aGVsbG8=",
+                }],
+            }
+            for p in patients
         ],
         "party": [
             {

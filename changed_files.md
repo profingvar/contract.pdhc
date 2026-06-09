@@ -132,3 +132,49 @@ green after the enum addition.
 Docs-only. No code change, no deploy. Pairs with #198 + #229 + #231
 that landed earlier in the same session — the framing now has live
 references to point at, not future tense.
+
+## 2026-06-09T11-XX-XXZ — feat #230: contract signer[] validation
+
+- `app/backend/app/fhir.py`: `ensure_contract_shape` now validates
+  `signer[]` via new `_validate_signer(s, i, ref_pattern)` helper.
+  Each signer must carry: `type` (CodeableConcept-shaped object),
+  `party` (Reference or list of References, each with non-empty
+  `reference` matching `ResourceType/id`), and `signature[]` (non-empty
+  array; each Signature requires non-empty `data`). No I/O — pure
+  shape validation.
+- `app/backend/app/signer_resolver.py` (NEW): post-shape catalogue
+  resolution called from the route layer. Patient signers verified
+  via best-effort GET against IPS (skips when `IPS_BASE_URL` is empty
+  to match #231 local-dev posture); User/Practitioner via local users
+  table; Organization accepted on shape alone (no SSO client in
+  contract.pdhc yet — documented in module docstring).
+  `STRICT_SIGNER_VALIDATION` env (default true) controls whether
+  resolution failures reject the contract or downgrade to a warning.
+  Reads env over Config class to survive pytest's monkeypatch.setenv
+  pattern (Config snapshots env at import time).
+- `app/backend/app/main.py`: new `_verify_signers` helper called
+  AFTER `ensure_contract_shape` + `_validate_scope_concepts` in both
+  create_contract and update_contract. Returns
+  `{error:'signer_unresolved', failures:[...]}` with 400 when any
+  reference doesn't resolve.
+- `app/backend/app/config.py`: new `STRICT_SIGNER_VALIDATION` knob.
+- `app/backend/tests/test_signer_validation.py` (NEW, 24 tests):
+  Layer 1 — structural (13): valid; no signer field; empty array;
+  non-array; missing type; type not object; missing party; empty
+  reference; bad reference shape; missing signature; empty signature
+  array; missing data; empty data.
+  Layer 2 — patient resolution (5): IPS unset skips; IPS 404 rejects
+  in strict; IPS 200 accepts; lenient downgrades 404; network error in
+  strict rejects.
+  Layer 2 — user/practitioner (3): unresolvable rejects in strict;
+  resolvable accepts; lenient accepts unresolvable.
+  Layer 2 — organization (1): accepted on shape alone (no SSO client).
+  Route 400 shape (2): shape error returns `error='validation'` with
+  field-level message; resolution error returns `error='signer_unresolved'`
+  with `failures` list.
+- `app/backend/tests/test_consent_emitter.py`: updated `_signed_contract`
+  fixture to produce shape-valid signers; added
+  `STRICT_SIGNER_VALIDATION=false` env to test setup so the emitter
+  tests don't try to reach IPS to verify their fake patient guids.
+
+Tests: full contract.pdhc suite 94/94 green (was 70/70).

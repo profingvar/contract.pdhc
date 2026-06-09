@@ -25,6 +25,7 @@ from .consent_emitter import (
 from .db import make_engine, make_session_factory
 from .fhir import build_capability_statement, ensure_contract_shape, get_contract_scope
 from .scope_validation import extract_scope_concept_guids, verify_concepts_exist
+from .signer_resolver import verify_signer_references
 from .models import Base, ContractRecord, User
 from .security import hash_password, verify_password
 from .sso import get_sso_login_url, validate_token
@@ -528,6 +529,23 @@ def create_app() -> Flask:
                 "parties": parties,
             })
 
+    def _verify_signers(resource):
+        """Ticket #230 — resolve every signer reference against the
+        relevant catalogue. Returns a Flask response tuple on
+        rejection or ``None`` to proceed."""
+        with db_session() as s:
+            failures = verify_signer_references(resource, session=s)
+        if failures:
+            return jsonify({
+                "error": "signer_unresolved",
+                "message": (
+                    "One or more signer references could not be "
+                    "resolved"
+                ),
+                "failures": failures,
+            }), 400
+        return None
+
     @app.post("/fhir/Contract")
     @require_role("admin")
     def create_contract():
@@ -538,6 +556,10 @@ def create_app() -> Flask:
             return jsonify({"error": "validation", "message": str(e)}), 400
 
         resp = _validate_scope_concepts(resource)
+        if resp is not None:
+            return resp
+
+        resp = _verify_signers(resource)
         if resp is not None:
             return resp
 
@@ -562,6 +584,10 @@ def create_app() -> Flask:
 
         resource["id"] = guid
         resp = _validate_scope_concepts(resource)
+        if resp is not None:
+            return resp
+
+        resp = _verify_signers(resource)
         if resp is not None:
             return resp
 

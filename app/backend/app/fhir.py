@@ -210,5 +210,253 @@ def ensure_contract_shape(resource: dict[str, Any]) -> dict[str, Any]:
             if not _REF_PATTERN.match(ref["reference"]):
                 raise ValueError(f"topic[{i}].reference must match 'ResourceType/id' format")
 
+    # Signer array — ticket #230. Each entry needs a type, a
+    # well-shaped party reference, and a non-empty signature value.
+    if "signer" in resource:
+        signers = resource["signer"]
+        if not isinstance(signers, list):
+            raise ValueError("signer must be an array")
+        for i, s in enumerate(signers):
+            _validate_signer(s, i, _REF_PATTERN)
+
+    # Term array — concept scope (optional, backward compatible)
+    if "term" in resource:
+        _validate_terms(resource["term"])
+
     return resource
+
+
+def _validate_signer(s: Any, i: int, ref_pattern) -> None:
+    """Structural validation for Contract.signer[i] (ticket #230).
+
+    Validates:
+      - signer is an object
+      - signer.type is a CodeableConcept-shaped object
+      - signer.party is a Reference (or list of Reference per the
+        legacy shape contract.pdhc has historically accepted) whose
+        ``reference`` matches the ``ResourceType/id`` form
+      - signer.signature is a non-empty array of Signature objects;
+        each must carry a non-empty ``data`` string
+
+    Reference resolution (verifying the guid corresponds to a real
+    user / org / patient) happens at the route layer, not here —
+    catalogue lookup needs IPS/SSO calls and a config knob to skip
+    in local dev.
+    """
+    if not isinstance(s, dict):
+        raise ValueError(f"signer[{i}] must be an object")
+    if "type" not in s:
+        raise ValueError(
+            f"signer[{i}].type is required (CodeableConcept)"
+        )
+    if not isinstance(s["type"], dict):
+        raise ValueError(
+            f"signer[{i}].type must be a CodeableConcept object"
+        )
+    if "party" not in s:
+        raise ValueError(f"signer[{i}].party is required")
+
+    party = s["party"]
+    parties = party if isinstance(party, list) else [party]
+    if not parties:
+        raise ValueError(f"signer[{i}].party must not be empty")
+    for j, p in enumerate(parties):
+        if not isinstance(p, dict):
+            raise ValueError(
+                f"signer[{i}].party[{j}] must be an object"
+            )
+        ref = p.get("reference")
+        if not isinstance(ref, str) or not ref.strip():
+            raise ValueError(
+                f"signer[{i}].party[{j}].reference must be a "
+                "non-empty string"
+            )
+        if not ref_pattern.match(ref):
+            raise ValueError(
+                f"signer[{i}].party[{j}].reference must match "
+                "'ResourceType/id' format"
+            )
+
+    if "signature" not in s:
+        raise ValueError(
+            f"signer[{i}].signature is required and must be a "
+            "non-empty array"
+        )
+    sigs = s["signature"]
+    if not isinstance(sigs, list) or not sigs:
+        raise ValueError(
+            f"signer[{i}].signature must be a non-empty array "
+            "of Signature objects"
+        )
+    for j, sig in enumerate(sigs):
+        if not isinstance(sig, dict):
+            raise ValueError(
+                f"signer[{i}].signature[{j}] must be an object"
+            )
+        data = sig.get("data")
+        if not isinstance(data, str) or not data.strip():
+            raise ValueError(
+                f"signer[{i}].signature[{j}].data must be a "
+                "non-empty string"
+            )
+
+
+# ── Concept scope helpers ─────────────────────────────────────────────
+
+_CONCEPT_URL_RE = re.compile(
+    r"^https?://.+/api/v1/concepts/[0-9a-f\-]{36}$"
+)
+
+ALLOWED_TERM_TYPES = frozenset({"request_scope", "return_scope"})
+
+ALLOWED_ASSET_TYPES = {
+    "request_scope": frozenset({"outbound_concept"}),
+    "return_scope": frozenset({"obligatory_return", "optional_return"}),
+}
+
+
+def _validate_terms(terms: Any) -> None:
+    """Validate the term[] array for concept scope definitions."""
+    if not isinstance(terms, list):
+        raise ValueError("term must be an array")
+
+    seen_types: set[str] = set()
+
+    for i, term in enumerate(terms):
+        if not isinstance(term, dict):
+            raise ValueError(f"term[{i}] must be an object")
+
+        # type.text is required and must be a known scope type
+        term_type = (term.get("type") or {}).get("text")
+        if not term_type:
+            raise ValueError(f"term[{i}].type.text is required")
+        if term_type not in ALLOWED_TERM_TYPES:
+            raise ValueError(
+                f"term[{i}].type.text must be one of: "
+                f"{', '.join(sorted(ALLOWED_TERM_TYPES))}"
+            )
+        if term_type in seen_types:
+            raise ValueError(f"duplicate term type '{term_type}'")
+        seen_types.add(term_type)
+
+        # offer.text is optional (human description)
+        if "offer" in term:
+            if not isinstance(term["offer"], dict):
+                raise ValueError(f"term[{i}].offer must be an object")
+
+        # asset[] is required and must contain valid concept references
+        assets = term.get("asset")
+        if not isinstance(assets, list) or not assets:
+            raise ValueError(f"term[{i}].asset must be a non-empty array")
+
+        allowed_types = ALLOWED_ASSET_TYPES[term_type]
+        for j, asset in enumerate(assets):
+            if not isinstance(asset, dict):
+                raise ValueError(f"term[{i}].asset[{j}] must be an object")
+
+            # asset type
+            asset_types = asset.get("type")
+            if not isinstance(asset_types, list) or not asset_types:
+                raise ValueError(
+                    f"term[{i}].asset[{j}].type must be a non-empty array"
+                )
+            asset_type_text = asset_types[0].get("text") if isinstance(asset_types[0], dict) else None
+            if not asset_type_text:
+                raise ValueError(
+                    f"term[{i}].asset[{j}].type[0].text is required"
+                )
+            if asset_type_text not in allowed_types:
+                raise ValueError(
+                    f"term[{i}].asset[{j}].type[0].text must be one of: "
+                    f"{', '.join(sorted(allowed_types))} "
+                    f"(for term type '{term_type}')"
+                )
+
+            # typeReference[] — concept URLs
+            refs = asset.get("typeReference")
+            if not isinstance(refs, list) or not refs:
+                raise ValueError(
+                    f"term[{i}].asset[{j}].typeReference must be a non-empty array"
+                )
+            for k, ref in enumerate(refs):
+                if not isinstance(ref, dict):
+                    raise ValueError(
+                        f"term[{i}].asset[{j}].typeReference[{k}] must be an object"
+                    )
+                reference = ref.get("reference", "")
+                if not _CONCEPT_URL_RE.match(reference):
+                    raise ValueError(
+                        f"term[{i}].asset[{j}].typeReference[{k}].reference "
+                        f"must be a valid concept URL "
+                        f"(https://…/api/v1/concepts/<uuid>)"
+                    )
+
+
+def get_contract_scope(fhir_contract: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract structured concept scope from a FHIR Contract resource.
+
+    Returns:
+        {
+            "request_scope": [
+                {"concept_guid": "<uuid>", "concept_url": "https://…/api/v1/concepts/<uuid>"},
+                ...
+            ] or None,
+            "return_scope": {
+                "obligatory_return": [
+                    {"concept_guid": "<uuid>", "concept_url": "https://…/api/v1/concepts/<uuid>"},
+                    ...
+                ],
+                "optional_return": [
+                    {"concept_guid": "<uuid>", "concept_url": "https://…/api/v1/concepts/<uuid>"},
+                    ...
+                ]
+            } or None
+        }
+        Returns None if no term[] is defined (backward compatible = all permitted).
+    """
+    terms = fhir_contract.get("term")
+    if not terms:
+        return None
+
+    result: dict[str, Any] = {"request_scope": None, "return_scope": None}
+    found_any = False
+
+    for term in terms:
+        term_type = (term.get("type") or {}).get("text")
+        if term_type not in ALLOWED_TERM_TYPES:
+            continue
+
+        concepts_by_asset_type: dict[str, list[dict[str, str]]] = {}
+        for asset in term.get("asset", []):
+            asset_type_text = (asset.get("type", [{}])[0] or {}).get("text", "")
+            concept_entries: list[dict[str, str]] = []
+            for ref in asset.get("typeReference", []):
+                reference = ref.get("reference", "")
+                if "/concepts/" in reference:
+                    guid = reference.split("/concepts/")[-1]
+                    concept_entries.append({
+                        "concept_guid": guid,
+                        "concept_url": reference,
+                    })
+            if concept_entries:
+                concepts_by_asset_type[asset_type_text] = concept_entries
+
+        if term_type == "request_scope":
+            all_concepts: list[dict[str, str]] = []
+            for c_list in concepts_by_asset_type.values():
+                all_concepts.extend(c_list)
+            if all_concepts:
+                result["request_scope"] = all_concepts
+                found_any = True
+
+        elif term_type == "return_scope":
+            return_scope = {
+                "obligatory_return": concepts_by_asset_type.get("obligatory_return", []),
+                "optional_return": concepts_by_asset_type.get("optional_return", []),
+            }
+            if return_scope["obligatory_return"] or return_scope["optional_return"]:
+                result["return_scope"] = return_scope
+                found_any = True
+
+    return result if found_any else None
 

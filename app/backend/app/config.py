@@ -32,6 +32,16 @@ class Config:
     IPS_BASE_URL = os.getenv("IPS_BASE_URL", "")
     IPS_API_KEY = os.getenv("IPS_API_KEY", "")
 
+    # Ticket #230 — Contract.signer[] reference resolution.
+    # When True (default), a signer pointing at a non-existent Patient,
+    # User, or Practitioner rejects the contract write with 400.
+    # When False, every resolution failure is downgraded to a warning
+    # and the write proceeds. Local dev sets this False so writes work
+    # without IPS running.
+    STRICT_SIGNER_VALIDATION = os.getenv(
+        "STRICT_SIGNER_VALIDATION", "true"
+    ).lower() in ("true", "1", "yes")
+
     # plan.pdhc — used by scope-concept existence validation (#135).
     PLAN_BASE_URL = os.getenv("PLAN_BASE_URL", "https://plan.pdhc.se")
 
