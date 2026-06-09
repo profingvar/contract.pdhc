@@ -22,6 +22,64 @@ The Contract Manager is one service in the PDHC family, alongside:
 
 Each service runs independently on its own port range and Docker Compose project.
 
+### 1.3 Where contracts fit in the PDL consent + blocking model
+
+The platform has **three peer concepts** for governing who may see
+whose data. They are not interchangeable. New code consistently
+gets this wrong — the symptom is usually a contract being asked to
+do something it cannot, and a Patient* row not being created where
+one should have been. Pick by what is being expressed:
+
+| You want to express… | Use… | Lives in | PDL/legal basis |
+|---|---|---|---|
+| "Organisation A may submit observations on concepts C[] under provider B's care plans" | `Contract` (`term[]` with `request_scope` / `return_scope`) | contract.pdhc | Civil agreement between two orgs — not a patient-data ruling |
+| "Patient P consents that caregiver G may read their data (optionally only concepts C[])" | `PatientConsent` | ips.pdhc (`/api/v1/patients/<guid>/consents`) | Lag (2022:913) § 5 cohesive-care consent |
+| "Patient P blocks caregiver/clinic S from reading their data" | `PatientBlock` | ips.pdhc (`/api/v1/patients/<guid>/blocks`) | PDL Ch 4 § 4 spärr |
+
+The shape is the giveaway:
+
+- **Contracts are concept-shaped.** They scope traffic between
+  organisations — never between a patient and an organisation. A
+  contract has a `signer[]` list and can include a patient signer,
+  but that is the patient *attesting to a civil agreement they are
+  the subject of*, not the contract acting as their consent record.
+  Even when the patient signs, the contract itself does not "scope
+  to" the patient: the next request from a different patient also
+  uses the same contract.
+
+- **PatientConsent is patient-shaped + caregiver-shaped + optionally
+  concept-narrowed.** It always belongs to exactly one patient and
+  names exactly one caregiver grantee. It exists so cohesive-care
+  read paths can *enforce* the patient's affirmative yes.
+
+- **PatientBlock is patient-shaped + source-shaped.** Same patient
+  axis as PatientConsent, but on the *no* side: hides a clinic's (or
+  caregiver's) data from readers outside that scope.
+
+#### Auto-emit from contract to consent (#231)
+
+When a contract is signed and a `Patient/<guid>` reference appears in
+`signer[]`, contract.pdhc emits a `PatientConsent` row on ips.pdhc as
+a side effect (`granted_via='contract'`, `contract_guid=<linkback>`).
+The signer reference and the auto-emitted consent are two distinct
+artefacts in two distinct services, related by `contract_guid`:
+
+- **contract.pdhc** keeps the legal artefact: who agreed, with what
+  scope, at what time. Cancelling the contract revokes the
+  auto-emitted consent.
+- **ips.pdhc** keeps the enforcement artefact: a row that downstream
+  read paths can consult cheaply without going through contract.pdhc.
+
+If you only need patient consent (no civil agreement, no concept
+scope, no provider org party) — author the `PatientConsent` directly
+on ips.pdhc. Inventing a contract just to get a consent row is the
+wrong tool.
+
+If you only need a block — go straight to `PatientBlock`. A contract
+cannot revoke another organisation's read rights to a patient's data;
+that is structurally a different decision (the patient's, not the
+caregiver's).
+
 ---
 
 ## 2) Container topology

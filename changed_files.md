@@ -114,3 +114,21 @@ List all edited files (full path), newest first.
 
 Tests: 70/70 contract.pdhc green (was 50/50). 229/229 ips.pdhc still
 green after the enum addition.
+
+## 2026-06-09T10-XX-XXZ — docs #232: concept-shaped framing (Contract vs PatientConsent vs PatientBlock)
+
+- `app/docs/architecture.md`: new §1.3 "Where contracts fit in the PDL
+  consent + blocking model" — concept matrix (what each is shaped by,
+  where it lives, what PDL/legal basis underwrites it), the "shape
+  is the giveaway" prose explaining contracts are concept-shaped not
+  patient-shaped, and the auto-emit cross-reference to #231 explaining
+  why the signer reference and the auto-emitted PatientConsent are
+  two distinct artefacts in two distinct services.
+- `app/docs/admin-manual.md`: §3 callout above "Creating contracts"
+  pointing to the framing section in architecture.md so operators
+  using the create-form path see the distinction at the moment of
+  decision.
+
+Docs-only. No code change, no deploy. Pairs with #198 + #229 + #231
+that landed earlier in the same session — the framing now has live
+references to point at, not future tense.

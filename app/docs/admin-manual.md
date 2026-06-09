@@ -95,6 +95,21 @@ Deactivated users cannot log in. Existing tokens will still pass JWT validation 
 
 ## 3) Contract management
 
+> **When to use a Contract vs PatientConsent vs PatientBlock**
+>
+> A Contract scopes traffic between two **organisations** (per concept,
+> never per patient). It is the wrong tool for "patient P consents to
+> caregiver G reading their data" — that is a `PatientConsent` on
+> ips.pdhc. It is also the wrong tool for "patient P blocks clinic S"
+> — that is a `PatientBlock` on ips.pdhc.
+>
+> When a contract is signed and a patient appears in `signer[]`, the
+> system auto-emits a `PatientConsent` row on ips.pdhc as a side
+> effect (`granted_via='contract'`, `contract_guid=<linkback>`). The
+> two artefacts coexist by design.
+>
+> See [architecture §1.3](architecture.md#13-where-contracts-fit-in-the-pdl-consent--blocking-model) for the full framing.
+
 ### 3.1 Creating contracts
 
 ```json
