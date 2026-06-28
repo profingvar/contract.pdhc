@@ -184,3 +184,22 @@ When a web instance exists:
 - Present diffs and propose next steps without applying changes remotely
 - Operator performs web edits/restarts (no ssh/scp instructions in plan)
 
+
+
+## Clinical-context schema role (per #294 RFC decision B1, 2026-06-28)
+
+contract.pdhc is the authoritative producer of the
+requesting-vs-provider org role distinction in the PDHC canonical
+clinical-context schema. `/internal/contract/<guid>/scope` returns:
+
+- `requesting_org_guid` — single guid: the org that ordered the SR
+- `provider_org_guids` — array: orgs authorised to perform the
+  measurement
+
+The PDHC canonical schema's `provider_org_guid` (singular) is the
+**first element** of this array. Multi-provider contracts are an
+edge case to revisit later if needed.
+
+See `~/T7_sidewinder/plans/pdhc_clinical_context_harmonisation_plan.md`
+§3 + `clinical_context_audit_2026-06-28.md` §4 decision B.
+
