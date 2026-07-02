@@ -1,0 +1,54 @@
+name: pytest
+
+# Rollup #350 §4.1 — first CI for contract.pdhc. Matches the pattern
+# established by request.pdhc (#376), ips.pdhc (#389), termbank
+# (#358), and plan.pdhc's test.yml.
+
+on:
+  push:
+    paths:
+      - 'app/backend/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths:
+      - 'app/backend/**'
+      - '.github/workflows/test.yml'
+  workflow_dispatch: {}
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          # 3.12 matches the Dockerfile base image (python:3.12-slim).
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: app/backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: app/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run pytest
+        working-directory: app/backend
+        env:
+          # Sibling tests use autouse monkeypatch fixtures for the
+          # rest; these cover the config guard baseline.
+          FLASK_ENV: 'development'
+          AUTH_DISABLED: 'true'
+          JWT_SECRET_KEY: 'ci-only-not-secret'
+          DATABASE_URL: 'sqlite+pysqlite:///:memory:'
+          BOOTSTRAP_ADMIN_USERNAME: 'admin'
+          BOOTSTRAP_ADMIN_PASSWORD: 'password'
+          INTERNAL_SERVICE_KEY: 'ci-only-internal-service-key'
+        run: pytest tests -q

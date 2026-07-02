@@ -11,6 +11,12 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", os.getenv("TEST_DATABASE_URL", "sqlite+pysqlite:///:memory:"))
     monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
     monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "password")
+    monkeypatch.setenv("INTERNAL_SERVICE_KEY", "test-service-key-12345")
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+    # Rollup #350 §5.1 — config.py refuses to boot with
+    # AUTH_DISABLED=true unless FLASK_ENV=development. Tests use
+    # AUTH_DISABLED=true to bypass SSO plumbing, so satisfy the guard.
+    monkeypatch.setenv("FLASK_ENV", "development")
 
 
 @pytest.fixture()

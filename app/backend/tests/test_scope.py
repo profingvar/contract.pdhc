@@ -26,6 +26,7 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "password")
     monkeypatch.setenv("INTERNAL_SERVICE_KEY", SERVICE_KEY)
     monkeypatch.setenv("AUTH_DISABLED", "true")
+    monkeypatch.setenv("FLASK_ENV", "development")  # #350 §5.1 guard
     # The existing term[] tests use random concept GUIDs that don't
     # exist in plan.pdhc, and the test suite doesn't run plan.pdhc.
     # Turning STRICT off keeps them passing; the strict path has its

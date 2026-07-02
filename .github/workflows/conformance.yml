@@ -1,0 +1,109 @@
+name: FHIR R5 conformance
+
+# Rollup #350 §4.1 — gate PRs on HL7 FHIR R5 conformance of the
+# CapabilityStatement that contract.pdhc advertises. Scope narrowed
+# per Rule 15 A (same pattern used by termbank #363, request.pdhc
+# #377, ips.pdhc #390): Contract resource shape polish is a separate
+# follow-up if the validator ever flags real drift there.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/backend/app/fhir.py'
+      - 'app/backend/app/main.py'
+      - 'app/backend/app/models.py'
+      - 'app/backend/tests/conformance_corpus_emit.py'
+      - 'app/backend/requirements.txt'
+      - 'app/backend/Makefile'
+      - '.github/workflows/conformance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/backend/app/fhir.py'
+      - 'app/backend/app/main.py'
+      - 'app/backend/app/models.py'
+      - 'app/backend/tests/conformance_corpus_emit.py'
+      - 'app/backend/requirements.txt'
+      - 'app/backend/Makefile'
+      - '.github/workflows/conformance.yml'
+  workflow_dispatch: {}
+
+env:
+  # Pin validator version. Bump only after `make conformance`
+  # succeeds locally with the new jar.
+  VALIDATOR_VERSION: '6.9.10'
+  FHIR_VERSION: '5.0.0'
+  # `n/a` disables the terminology server. contract.pdhc's CS
+  # references R5-standard code systems that resolve from the
+  # bundled package cache without tx. Enabling tx introduces
+  # flakiness without adding value at this scope.
+  TX_SERVER: 'n/a'
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: app/backend/requirements.txt
+
+      - name: Cache validator_cli.jar
+        id: cache-jar
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/fhir/validator_cli.jar
+          key: fhir-validator-${{ env.VALIDATOR_VERSION }}
+
+      - name: Download validator_cli.jar (on cache miss)
+        if: steps.cache-jar.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.local/share/fhir
+          curl -sSL \
+            -o ~/.local/share/fhir/validator_cli.jar \
+            'https://github.com/hapifhir/org.hl7.fhir.core/releases/download/${{ env.VALIDATOR_VERSION }}/validator_cli.jar'
+          ls -lh ~/.local/share/fhir/validator_cli.jar
+
+      - name: Install Python deps
+        working-directory: app/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Emit corpus
+        working-directory: app/backend
+        env:
+          FLASK_ENV: 'development'
+          AUTH_DISABLED: 'true'
+          JWT_SECRET_KEY: 'ci-only-not-secret'
+          DATABASE_URL: 'sqlite+pysqlite:///:memory:'
+          BOOTSTRAP_ADMIN_USERNAME: 'admin'
+          BOOTSTRAP_ADMIN_PASSWORD: 'ci-only-placeholder'
+          INTERNAL_SERVICE_KEY: 'ci-only-internal-service-key'
+        run: make corpus
+
+      - name: Run HL7 R5 conformance validator
+        working-directory: app/backend
+        run: make conformance
+
+      - name: Upload corpus artifact (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fhir-corpus
+          path: app/backend/tests/fhir_corpus/
+          retention-days: 7

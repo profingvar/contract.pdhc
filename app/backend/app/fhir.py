@@ -18,9 +18,20 @@ ALLOWED_CONTRACT_STATUSES = frozenset({
 API_VERSION = "1.0.0"
 
 
+# Rollup #350 §2.2 — CapabilityStatement.date derives from this file's
+# mtime so it's stable across gunicorn workers AND across requests
+# (default gunicorn forks workers post-import; `datetime.now()` at
+# module level would run once per worker and give inconsistent dates
+# on consecutive requests). Only advances on a real image rebuild.
+# Same pattern as request.pdhc #367 + memory
+# `infra_gunicorn_worker_fork_freezes_datetime`.
+_CAPABILITYSTATEMENT_DATE = datetime.fromtimestamp(
+    os.path.getmtime(__file__), tz=timezone.utc
+).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def build_capability_statement() -> dict[str, Any]:
     """Return a full FHIR R5 CapabilityStatement for this Contract server."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     base_url = os.getenv("PUBLIC_BASE_URL", "http://localhost:9021")
 
     return {
@@ -32,7 +43,7 @@ def build_capability_statement() -> dict[str, Any]:
         "title": "PDHC Contract Manager \u2014 FHIR Capability Statement",
         "status": "active",
         "experimental": False,
-        "date": now,
+        "date": _CAPABILITYSTATEMENT_DATE,
         "publisher": "PDHC",
         "contact": [{"name": "PDHC Development"}],
         "description": (
@@ -67,7 +78,14 @@ def build_capability_statement() -> dict[str, Any]:
                         {
                             "coding": [
                                 {
-                                    "system": "http://terminology.hl7.org/CodeSystem/restful-security-service",
+                                    # Rollup #350 §2.3-analogue — R5's
+                                    # restful-security-service system
+                                    # URL (was the R4-era
+                                    # http://terminology.hl7.org/CodeSystem/…
+                                    # variant which the R5 validator
+                                    # doesn't resolve). Same fix
+                                    # request.pdhc landed in #377.
+                                    "system": "http://hl7.org/fhir/restful-security-service",
                                     "code": "OAuth",
                                     "display": "OAuth",
                                 }
@@ -116,7 +134,32 @@ def build_capability_statement() -> dict[str, Any]:
                         "versioning": "no-version",
                         "readHistory": False,
                         "updateCreate": False,
-                        "searchParam": [],
+                        # `searchParam` omitted — FHIR forbids empty
+                        # arrays. Add entries here when search
+                        # parameters are actually supported.
+                        # Rollup #350 §2.1 — advertise the /scope
+                        # endpoint that main.py:446 has served since
+                        # before this rollup. Bidirectional truthfulness
+                        # (Rule 20). `definition` is a canonical URL;
+                        # the concrete METHOD/path lives on the first
+                        # line of `documentation` (matches the shape
+                        # used by request.pdhc's #377 CapabilityStatement).
+                        "operation": [
+                            {
+                                "name": "scope",
+                                "definition": (
+                                    f"{base_url}/OperationDefinition/Contract-scope"
+                                ),
+                                "documentation": (
+                                    "GET /fhir/Contract/{guid}/scope — "
+                                    "Returns a lightweight scope + status "
+                                    "descriptor for the contract "
+                                    "(request_scope, return_scope, "
+                                    "scope_defined, status). Public, "
+                                    "rate-limited under READ_RATE_LIMIT."
+                                ),
+                            },
+                        ],
                     }
                 ],
             }

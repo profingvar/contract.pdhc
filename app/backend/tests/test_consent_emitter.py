@@ -40,6 +40,7 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "password")
     monkeypatch.setenv("INTERNAL_SERVICE_KEY", "test-service-key-12345")
     monkeypatch.setenv("AUTH_DISABLED", "true")
+    monkeypatch.setenv("FLASK_ENV", "development")  # #350 §5.1 guard
     # The emitter is a noop unless IPS_BASE_URL is set.
     monkeypatch.setenv("IPS_BASE_URL", "http://ips.test")
     monkeypatch.setenv("IPS_API_KEY", "test-ips-key")

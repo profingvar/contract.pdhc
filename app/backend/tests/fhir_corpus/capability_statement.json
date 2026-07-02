@@ -1,0 +1,92 @@
+{
+  "contact": [
+    {
+      "name": "PDHC Development"
+    }
+  ],
+  "date": "2026-07-02T13:39:32Z",
+  "description": "FHIR R5 capability statement for the PDHC Contract Manager. This server manages healthcare contracts as FHIR R5 Contract resources with JWT-authenticated admin CRUD and rate-limited public read access.",
+  "experimental": false,
+  "fhirVersion": "5.0.0",
+  "format": [
+    "application/fhir+json"
+  ],
+  "id": "pdhc-contract-manager",
+  "implementation": {
+    "description": "PDHC Contract Manager instance",
+    "url": "http://localhost:9022"
+  },
+  "kind": "instance",
+  "name": "PDHCContractManagerCapabilityStatement",
+  "publisher": "PDHC",
+  "resourceType": "CapabilityStatement",
+  "rest": [
+    {
+      "documentation": "RESTful FHIR R5 server with Contract CRUD support. Read endpoints are public and rate-limited to 100 requests/hour per IP. Write endpoints (create, update, delete) require a JWT Bearer token with admin role. User management is available under /admin/.",
+      "mode": "server",
+      "resource": [
+        {
+          "documentation": "FHIR R5 Contract resources representing healthcare agreements. Public read access with rate limiting. Admin-only create, update, and delete.",
+          "interaction": [
+            {
+              "code": "read",
+              "documentation": "GET /fhir/Contract/{guid} — public, rate-limited"
+            },
+            {
+              "code": "search-type",
+              "documentation": "GET /fhir/Contract — returns Bundle searchset, public, rate-limited"
+            },
+            {
+              "code": "create",
+              "documentation": "POST /fhir/Contract — admin JWT required"
+            },
+            {
+              "code": "update",
+              "documentation": "PUT /fhir/Contract/{guid} — admin JWT required"
+            },
+            {
+              "code": "delete",
+              "documentation": "DELETE /fhir/Contract/{guid} — admin JWT required, returns 204"
+            }
+          ],
+          "operation": [
+            {
+              "definition": "http://localhost:9021/OperationDefinition/Contract-scope",
+              "documentation": "GET /fhir/Contract/{guid}/scope — Returns a lightweight scope + status descriptor for the contract (request_scope, return_scope, scope_defined, status). Public, rate-limited under READ_RATE_LIMIT.",
+              "name": "scope"
+            }
+          ],
+          "profile": "http://hl7.org/fhir/StructureDefinition/Contract",
+          "readHistory": false,
+          "type": "Contract",
+          "updateCreate": false,
+          "versioning": "no-version"
+        }
+      ],
+      "security": {
+        "cors": true,
+        "description": "Authentication via POST /auth/login returns a JWT Bearer token (8-hour expiry). Include as Authorization: Bearer <token> on admin endpoints. Read endpoints are public. Roles: admin (full CRUD + user management), reader (read-only).",
+        "service": [
+          {
+            "coding": [
+              {
+                "code": "OAuth",
+                "display": "OAuth",
+                "system": "http://hl7.org/fhir/restful-security-service"
+              }
+            ],
+            "text": "JWT Bearer token via /auth/login"
+          }
+        ]
+      }
+    }
+  ],
+  "software": {
+    "name": "PDHC Contract Manager",
+    "version": "1.0.0"
+  },
+  "status": "active",
+  "title": "PDHC Contract Manager — FHIR Capability Statement",
+  "url": "http://localhost:9021/fhir/metadata",
+  "version": "1.0.0"
+}

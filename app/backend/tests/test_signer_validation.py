@@ -42,6 +42,7 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "password")
     monkeypatch.setenv("INTERNAL_SERVICE_KEY", "test-service-key-12345")
     monkeypatch.setenv("AUTH_DISABLED", "true")
+    monkeypatch.setenv("FLASK_ENV", "development")  # #350 §5.1 guard
     monkeypatch.setenv("STRICT_SCOPE_CONCEPTS", "false")
     # By default keep IPS resolution off so tests focus on shape +
     # local-user resolution. Specific tests opt in.

@@ -1,15 +1,26 @@
+name: contract
+
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: contracts
-      POSTGRES_USER: contracts
-      POSTGRES_PASSWORD: contracts
+      POSTGRES_DB: ${POSTGRES_DB:-contracts}
+      POSTGRES_USER: ${POSTGRES_USER:-contracts}
+      # Rollup #350 §1.2 — require an explicit env var per platform
+      # CLAUDE.md §9. The pre-#350 shape hardcoded `contracts` which
+      # is fine for local dev but differs from every other pdhc
+      # service and hides credential-drift bugs.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       # Local-dev only: allow container-network connections without SSL.
       # Harden later for server deployment (SCRAM + TLS).
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "9020:5432"
+      # Ticket #72: pin host interface so only localhost (= reverse proxy) can
+      # reach the DB/api/web ports. Without the 127.0.0.1: prefix docker binds
+      # to 0.0.0.0 and the colima ssh-mux forwarder exposes *:9020 on the LAN
+      # (CLAUDE.md §3 violation).
+      - "127.0.0.1:9020:5432"
     volumes:
       - contracts_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +33,7 @@ services:
     build:
       context: ./backend
     environment:
-      DATABASE_URL: postgresql+psycopg://contracts:contracts@db:5432/contracts
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-contracts}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@db:5432/${POSTGRES_DB:-contracts}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}
       READ_RATE_LIMIT: "100 per hour"
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
@@ -35,22 +46,26 @@ services:
       SSO_CLIENT_SECRET: ${SSO_CLIENT_SECRET:-}
       SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-https://contract.pdhc.se/api/v1/auth/callback}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://contract.pdhc.se}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-}
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "9021:9021"
+      - "127.0.0.1:9021:9021"
     restart: unless-stopped
 
   web:
     build:
       context: ./web
+    restart: unless-stopped  # Rollup #350 §1.3.
     depends_on:
       - api
     volumes:
       - ./docs:/usr/share/nginx/docs:ro
     ports:
-      - "9022:80"
+      - "127.0.0.1:9022:80"
 
 volumes:
   contracts_pgdata:
+    name: app_contracts_pgdata
+    external: true

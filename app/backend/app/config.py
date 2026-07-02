@@ -55,6 +55,16 @@ class Config:
 
     # SSO integration
     AUTH_DISABLED = os.getenv("AUTH_DISABLED", "false").lower() in ("true", "1", "yes")
+    # Rollup #350 §5.1 — refuse to boot with AUTH_DISABLED=true unless
+    # FLASK_ENV=development. Matches the pattern in request.pdhc's
+    # config.py §91 guard. A stale prod .env with AUTH_DISABLED=true
+    # would otherwise silently open contract writes to anonymous
+    # callers.
+    if AUTH_DISABLED and ENV != "development":
+        raise RuntimeError(
+            "AUTH_DISABLED=true requires FLASK_ENV=development. "
+            f"Refusing to start with auth bypassed in FLASK_ENV={ENV!r}."
+        )
     SSO_BASE_URL = os.getenv("SSO_BASE_URL", "https://sso.pdhc.se")
     SSO_CLIENT_ID = os.getenv("SSO_CLIENT_ID", "")
     SSO_CLIENT_SECRET = os.getenv("SSO_CLIENT_SECRET", "")
