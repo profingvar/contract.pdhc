@@ -25,6 +25,7 @@ from .consent_emitter import (
 from .consent_reconciler import reconcile as reconcile_consents
 from .db import make_engine, make_session_factory
 from .fhir import build_capability_statement, ensure_contract_shape, get_contract_scope
+from .reform_identity import care_unit_guids_from_blob
 from .scope_validation import extract_scope_concept_guids, verify_concepts_exist
 from .signer_resolver import verify_signer_references
 from .models import Base, ContractRecord, User
@@ -362,6 +363,9 @@ def create_app() -> Flask:
                 "is_su_admin": blob.get("is_su_admin", False),
                 "effective_phases": blob.get("effective_phases", []),
                 "organization_ids": blob.get("organization_ids", []),
+                # Reform identity (M0 #414), dual with the legacy fields above.
+                "session_phases": blob.get("session_phases", []),
+                "care_unit_guids": care_unit_guids_from_blob(blob),
                 "sso": True,
             },
             expires_delta=timedelta(hours=8),
@@ -390,6 +394,8 @@ def create_app() -> Flask:
             "is_su_admin": claims.get("is_su_admin", False),
             "effective_phases": claims.get("effective_phases", []),
             "organization_ids": claims.get("organization_ids", []),
+            "session_phases": claims.get("session_phases", []),
+            "care_unit_guids": claims.get("care_unit_guids", []),
             "sso": claims.get("sso", False),
         })
 

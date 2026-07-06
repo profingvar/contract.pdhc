@@ -178,3 +178,11 @@ references to point at, not future tense.
   tests don't try to reach IPS to verify their fake patient guids.
 
 Tests: full contract.pdhc suite 94/94 green (was 70/70).
+
+## 2026-07-06 — M0 #414: adopt affiliations[] org identity
+- app/backend/app/reform_identity.py — NEW config-free helper
+  care_unit_guids_from_blob() (Zone-1 care units from affiliations[]).
+- app/backend/app/main.py — import it; carry session_phases + care_unit_guids
+  into the local JWT + /api/v1/auth/me, dual with legacy effective_phases/
+  organization_ids.
+- app/backend/tests/test_reform_identity.py — NEW, 3 tests. Suite 112/112.
