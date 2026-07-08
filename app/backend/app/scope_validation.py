@@ -78,9 +78,10 @@ def verify_concepts_exist(guids: Iterable[str]) -> tuple[bool, dict]:
     missing: list[str] = []
     for guid in guids:
         try:
+            from .session_headers import outbound_session_headers
             resp = requests.get(
                 f'{base}/api/v1/concepts/{guid}',
-                headers={'Accept': 'application/json'},
+                headers={'Accept': 'application/json', **outbound_session_headers()},
                 timeout=10,
             )
         except requests.RequestException as e:

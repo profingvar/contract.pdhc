@@ -117,11 +117,13 @@ def _ips_base() -> str:
 
 
 def _ips_headers() -> dict:
+    from .session_headers import outbound_session_headers
     h = {"Accept": "application/json", "Content-Type": "application/json"}
     key = current_app.config.get("IPS_API_KEY") or \
         current_app.config.get("INTERNAL_SERVICE_KEY") or ""
     if key:
         h["X-API-Key"] = key
+    h.update(outbound_session_headers())
     return h
 
 

@@ -224,13 +224,15 @@ def create_app() -> Flask:
                 if ref_str.startswith("Organization/"):
                     provider_org_guid = ref_str.split("/", 1)[1]
                     try:
+                        from .session_headers import outbound_session_headers
                         resp = http_requests.post(
                             f"{request_base}/api/v1/internal/auto-provision-pat",
                             json={
                                 "provider_org_guid": provider_org_guid,
                                 "contract_guid": contract_guid,
                             },
-                            headers={"X-Service-Key": service_key},
+                            headers={"X-Service-Key": service_key,
+                                     **outbound_session_headers()},
                             timeout=10,
                         )
                         logger.info(
