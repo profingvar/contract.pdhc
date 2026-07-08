@@ -1005,7 +1005,15 @@ function buildContract() {
 async function deleteContract(guid) {
   if (!confirm("Delete this contract?")) return;
   const r = await api("/fhir/Contract/" + guid, { method: "DELETE" });
-  if (r.ok || r.status === 204) { toast("Contract deleted"); navigate("/contracts"); }
+  if (r.ok || r.status === 204) {
+    toast("Contract deleted");
+    // Go back to the list AND force a re-render. Assigning the same
+    // hash (#/contracts) does not fire hashchange, so deleting from the
+    // list view would otherwise leave the stale row until a manual
+    // reload. Re-render directly in that case to refetch the list.
+    if (location.hash.slice(1) === "/contracts") { state.route = "/contracts"; render(); }
+    else navigate("/contracts");
+  }
   else toast(r.json?.error || "Delete failed", "error");
 }
 
