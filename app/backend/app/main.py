@@ -363,8 +363,14 @@ def create_app() -> Flask:
                 "user_type": blob.get("user_type", ""),
                 "user_guid": blob.get("user_guid", ""),
                 "is_su_admin": blob.get("is_su_admin", False),
-                "effective_phases": blob.get("effective_phases", []),
-                "organization_ids": blob.get("organization_ids", []),
+                # M0 #409: the legacy-named claims are now SOURCED from the
+                # reform fields (affiliations[]/session_phases) with a
+                # legacy-blob fallback, so they stay populated after sso
+                # stops dual-emitting organization_ids/effective_phases.
+                "effective_phases": (blob.get("session_phases")
+                                     or blob.get("effective_phases", [])),
+                "organization_ids": (care_unit_guids_from_blob(blob)
+                                     or blob.get("organization_ids", [])),
                 # Reform identity (M0 #414), dual with the legacy fields above.
                 "session_phases": blob.get("session_phases", []),
                 "care_unit_guids": care_unit_guids_from_blob(blob),
