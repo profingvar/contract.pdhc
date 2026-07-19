@@ -1,0 +1,143 @@
+Ticket 1. [DONE] read the document data_package_reference.docx in provider.pdhc/docs and create an item list of needed reforms in contract.pdhc. Give the result after each added ticket in this document.
+
+--- Ticket 1 Results (derived from provider.pdhc/docs/data_package_reference.md, Section 8) ---
+
+1.1 [ ] FHIR term[] validation — extend ensure_contract_shape() in fhir.py
+   - Accept and validate term[] array inside the FHIR Contract resource
+   - Two term types: "request_scope" (outbound concepts) and "return_scope" (return concepts)
+   - request_scope contains asset[] with type "outbound_concept" and typeReference[] pointing to plan.pdhc concept URLs
+   - return_scope contains asset[] with types "obligatory_return" and "optional_return", each with typeReference[]
+   - Validate that typeReference URLs match the pattern https://plan.pdhc.se/api/v1/concepts/<guid>
+   - Backward compatible: term[] is optional — contracts without it permit all concepts
+
+1.2 [ ] Scope extraction helper — new function get_contract_scope(contract_guid)
+   - Extract permitted concept GUIDs from term[].asset[].typeReference[]
+   - Return structured result: { request_scope: [concept_guids], return_scope: { obligatory: [concept_guids], optional: [concept_guids] } }
+   - Return None/null if no scope terms defined (backward compatible — means "all permitted")
+   - Location: fhir.py or new scope_service.py
+
+1.3 [ ] New endpoint — GET /fhir/Contract/<guid>/scope
+   - Lightweight endpoint returning only the concept scope + contract status
+   - Response: { contract_guid, status, scope_defined, request_scope: [...], return_scope: { obligatory_return: [...], optional_return: [...] } }
+   - When no scope defined: scope_defined=false, both lists null
+   - When contract revoked/terminated: return empty lists (gateway rejects all submissions)
+   - Auth: public + rate-limited (same as GET /fhir/Contract/<guid>)
+   - This is the endpoint gateway.pdhc will call to validate provider submissions against contract
+
+1.4 [ ] Internal service key auth — add X-Service-Key support
+   - Add INTERNAL_SERVICE_KEY to config.py
+   - Add middleware/decorator that validates X-Service-Key header for internal endpoints
+   - Gateway.pdhc will use this key to call the scope endpoint without SSO
+   - The scope endpoint (1.3) should accept either public rate-limited access OR X-Service-Key (internal callers bypass rate limit)
+
+1.5 [ ] Scope editor in contract admin UI
+   - Add a scope section to the contract create/edit form
+   - Search/select concepts from plan.pdhc vocabulary API (GET https://plan.pdhc.se/api/v1/concepts?search=...)
+   - Separate lists for: outbound concepts (request_scope) and return concepts (obligatory + optional)
+   - On save, inject the term[] structure into the FHIR Contract JSON before storing
+   - Show current scope on contract detail view
+   - Can be deferred if no admin UI exists yet
+
+1.6 [ ] Tests for all scope reforms
+   - FHIR validation: term[] accepted, bad term types rejected, missing typeReference rejected
+   - Scope extraction: returns correct concept lists, handles missing terms, handles empty terms
+   - Scope endpoint: returns scope for scoped contract, returns scope_defined=false for legacy contract, returns empty for revoked contract
+   - Internal service key: valid key accepted, missing/invalid key rejected
+   - Integration: create contract with scope → query scope endpoint → verify round-trip
+
+--- Ticket 2 Results (implementing 1.1 + 1.2) ---
+
+2.1 Extended ensure_contract_shape() in fhir.py with term[] validation:
+    - Validates term[].type.text is "request_scope" or "return_scope"
+    - Rejects duplicate term types
+    - request_scope: assets must have type "outbound_concept"
+    - return_scope: assets must have type "obligatory_return" or "optional_return"
+    - All typeReference[].reference must match concept URL pattern (https://…/api/v1/concepts/<uuid>)
+    - term[] is optional — contracts without it pass validation (backward compatible)
+
+2.2 Added get_contract_scope(fhir_contract) helper:
+    - Extracts concept GUIDs from term[].asset[].typeReference[]
+    - Returns structured dict: { request_scope: [guids], return_scope: { obligatory_return: [guids], optional_return: [guids] } }
+    - Returns None when no scope terms defined (backward compatible)
+
+Files modified: app/backend/app/fhir.py
+
+Ticket 3. Are thereby the reforms done that are necessary for the new flow?
+
+--- Ticket 3 Results ---
+
+3.1 Status check: 2 of 6 reform items done (1.1 + 1.2). Remaining critical items:
+    - 1.3 Scope endpoint (gateway needs this)
+    - 1.4 Internal service key auth (gateway needs this)
+    - 1.5 Scope editor UI (deferrable)
+    - 1.6 Tests (after 1.3 + 1.4)
+
+
+--- Ticket 4 Results (implementing 1.3 + 1.4) ---
+
+4.1 Added INTERNAL_SERVICE_KEY to config.py (env var, empty default for dev)
+
+4.2 Added require_service_key decorator in main.py:
+    - Validates X-Service-Key header against INTERNAL_SERVICE_KEY config
+    - Returns 401 if missing/invalid, 500 if not configured
+
+4.3 Added GET /fhir/Contract/<guid>/scope (public, rate-limited):
+    - Returns { contract_guid, status, scope_defined, request_scope, return_scope }
+    - Revoked/terminated/cancelled → scope_defined=true, empty lists
+    - No term[] defined → scope_defined=false, null lists
+    - With term[] → structured concept GUID lists
+
+4.4 Added GET /internal/contract/<guid>/scope (X-Service-Key auth, no rate limit):
+    - Same response format as 4.3
+    - Gateway.pdhc uses this path to avoid public rate limiting
+
+Files modified: app/backend/app/config.py, app/backend/app/main.py
+
+--- Ticket 5 Results (implementing 1.5 deferred + 1.6 tests) ---
+
+5.1 Item 1.5 (scope editor UI) — deferred. No admin UI exists for contracts;
+    contracts are managed via API. Scope can be set via POST/PUT with term[] in the JSON body.
+
+5.2 Item 1.6 — tests written and passing. Created tests/test_scope.py with 27 tests:
+    - TestTermValidation (10 tests): valid scope accepted, no term backward compat,
+      term must be array, unknown type rejected, duplicate type rejected, missing type.text,
+      empty asset, wrong asset type for term, bad concept URL, missing typeReference
+    - TestScopeExtraction (5 tests): full scope, no terms, empty terms,
+      request_scope only, return_scope only
+    - TestScopeEndpointPublic (5 tests): scoped contract, legacy no-scope,
+      revoked empty, terminated empty, not found
+    - TestInternalScopeEndpoint (5 tests): valid key, missing key, invalid key,
+      not found, revoked contract
+    - TestScopeRoundTrip (2 tests): create+query via both endpoints, update scope reflected
+
+5.3 Fixed AUTH_DISABLED env var in both test files (was missing, caused 400 on /auth/login)
+
+5.4 Full suite: 45/45 passed (18 existing + 27 new)
+
+Files created: app/backend/tests/test_scope.py
+Files modified: app/backend/tests/test_health_and_contracts.py (added AUTH_DISABLED + INTERNAL_SERVICE_KEY)
+
+--- Security Revision (post-ticket 5) ---
+
+Service is public-facing (contract.pdhc.se). Three hardening fixes applied to require_service_key:
+  - Replaced == with hmac.compare_digest for constant-time key comparison (prevents timing attacks)
+  - Error response changed from "service key not configured" / "invalid_service_key" to generic "unauthorized" (no internal state leakage)
+  - Unconfigured INTERNAL_SERVICE_KEY (empty string) now returns 401, not 500 (safe default: deny all)
+
+Scope endpoints audited — return only contract_guid, status, scope_defined, and concept GUID lists.
+No full FHIR Contract JSON, party data, or internal identifiers exposed.
+
+Files modified: app/backend/app/main.py, app/backend/tests/test_scope.py
+Tests: 45/45 passed after hardening.
+
+--- Contract Reform Status ---
+
+All critical items complete:
+  1.1 [DONE] FHIR term[] validation (ticket 2)
+  1.2 [DONE] Scope extraction helper (ticket 2)
+  1.3 [DONE] GET /fhir/Contract/<guid>/scope endpoint (ticket 4)
+  1.4 [DONE] Internal service key auth (ticket 4)
+  1.5 [DEFERRED] Scope editor UI — no admin UI exists
+  1.6 [DONE] Tests — 27 new, 45/45 total (ticket 5)
+
+contract.pdhc is ready for the gateway.pdhc reform phase.

@@ -1,0 +1,12 @@
+ A request is formed by adding a IPSexcerpt from IPS and a plan def from plan. 
+ SU sees all patients. User is only allowed patients from own organisation. This is paired with a plandefinition chosen from a dropdown of the available from plan. The plandef is fully editable. Once edited it is with full GUID references to concepts/plandefs etc formed into a .json and is stored with a request guid.
+
+ This request guid is then paired with the contract registry and all suppliers with a fit will be able to accept the offer. Also there is a push functions for certain services.
+
+ The receiver is noted in the sent requests registry including their receipt
+
+ When responses are sent back to the other component (Gatekeeper, not coded yet) the requestguid that is sent together with the data are matched with the request registry. If alla data are in or period has passed, the reguest is labelled archived and will not accept data.
+
+  The contract has a guid! 
+
+  Use FHIR terminology
