@@ -186,3 +186,4 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
   into the local JWT + /api/v1/auth/me, dual with legacy effective_phases/
   organization_ids.
 - app/backend/tests/test_reform_identity.py — NEW, 3 tests. Suite 112/112.
+- contract.pdhc/app/docs/architecture.md (Port Allocation section)

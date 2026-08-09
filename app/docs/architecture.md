@@ -279,3 +279,14 @@ Each concept is a `typeReference[].reference` URL of the form `https://…/api/v
 ### 5.6 Health
 
 `GET /health` probes the DB and returns the canonical PDHC shape — `{status, database, service, version}` — with HTTP `200` when the DB is reachable and `503` (`degraded` / `unavailable`) when it is not.
+
+## Port Allocation
+
+All ports bind to `127.0.0.1` (loopback only); external traffic arrives
+via the reverse proxy. (Detailed in §2.2 above.)
+
+| Port | Service |
+|------|---------|
+| 9021 | Flask REST API (Gunicorn) |
+| 9020 | PostgreSQL database |
+| 9022 | nginx serving SPA + docs |
