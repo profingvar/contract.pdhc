@@ -187,3 +187,5 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
   organization_ids.
 - app/backend/tests/test_reform_identity.py — NEW, 3 tests. Suite 112/112.
 - contract.pdhc/app/docs/architecture.md (Port Allocation section)
+- app/backend/app/main.py — public /fhir/Contract/<guid>/scope now returns `parties` (mirrors /internal); closes gateway fetch_parties gap from gateway 2941f65
+- app/backend/tests/test_scope.py — +test_public_scope_endpoint_returns_parties (suite 116)
