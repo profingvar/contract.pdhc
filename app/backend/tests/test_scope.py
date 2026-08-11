@@ -100,6 +100,25 @@ def _create_contract(client, admin_token, payload):
     return r.json["id"]
 
 
+def test_public_scope_endpoint_returns_parties(client, admin_token):
+    """The public /fhir/Contract/<guid>/scope must include `parties` (same as
+    /internal) — gateway.pdhc's fetch_parties reads this endpoint because the
+    reverse proxy routes /internal to the web UI."""
+    payload = _make_scoped_contract()
+    payload["party"] = [
+        {"role": [{"coding": [{"code": "payer"}]}],
+         "reference": [{"reference": "Organization/req-org-guid"}]},
+        {"role": [{"coding": [{"code": "provider"}]}],
+         "reference": [{"reference": "Organization/prov-org-guid"}]},
+    ]
+    guid = _create_contract(client, admin_token, payload)
+    r = client.get(f"/fhir/Contract/{guid}/scope")
+    assert r.status_code == 200
+    parties = r.get_json()["parties"]
+    assert parties["requesting_org_guid"] == "req-org-guid"
+    assert parties["provider_org_guids"] == ["prov-org-guid"]
+
+
 # ── 1.1 FHIR term[] validation ──────────────────────────────────────
 
 

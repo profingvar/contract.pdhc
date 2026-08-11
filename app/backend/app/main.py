@@ -470,6 +470,11 @@ def create_app() -> Flask:
 
             contract = row.fhir_contract
             status = contract.get("status", "unknown")
+            # parties are already public via GET /fhir/Contract/<guid> (party[]);
+            # surface them here too so a cross-service caller reaching this
+            # endpoint (e.g. gateway.pdhc, whose reverse proxy routes /internal
+            # to the web UI) gets the same shape as /internal (fetch_parties).
+            parties = _extract_contract_parties(contract)
 
             # Revoked/terminated/cancelled contracts → empty scope, all submissions rejected
             if status in ("revoked", "terminated", "cancelled"):
@@ -479,6 +484,7 @@ def create_app() -> Flask:
                     "scope_defined": True,
                     "request_scope": [],
                     "return_scope": {"obligatory_return": [], "optional_return": []},
+                    "parties": parties,
                 })
 
             scope = get_contract_scope(contract)
@@ -490,6 +496,7 @@ def create_app() -> Flask:
                     "scope_defined": False,
                     "request_scope": None,
                     "return_scope": None,
+                    "parties": parties,
                 })
 
             return jsonify({
@@ -498,6 +505,7 @@ def create_app() -> Flask:
                 "scope_defined": True,
                 "request_scope": scope.get("request_scope"),
                 "return_scope": scope.get("return_scope"),
+                "parties": parties,
             })
 
     @app.get("/internal/contract/<guid>/scope")
