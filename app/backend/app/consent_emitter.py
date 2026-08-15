@@ -122,7 +122,10 @@ def _ips_headers() -> dict:
     key = current_app.config.get("IPS_API_KEY") or \
         current_app.config.get("INTERNAL_SERVICE_KEY") or ""
     if key:
-        h["X-API-Key"] = key
+        # ips require_auth reads ONLY the Authorization header (Bearer/ApiKey);
+        # X-API-Key is silently ignored → 401 (same bug fixed for request→ips
+        # in #558). Send the ApiKey scheme.
+        h["Authorization"] = f"ApiKey {key}"
     h.update(outbound_session_headers())
     return h
 

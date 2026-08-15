@@ -189,3 +189,7 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
 - contract.pdhc/app/docs/architecture.md (Port Allocation section)
 - app/backend/app/main.py — public /fhir/Contract/<guid>/scope now returns `parties` (mirrors /internal); closes gateway fetch_parties gap from gateway 2941f65
 - app/backend/tests/test_scope.py — +test_public_scope_endpoint_returns_parties (suite 116)
+
+- app/backend/app/main.py — GET /fhir/Contract now paginates (_count 1..200 + _offset, adds Bundle.total). Deployed 2026-08-15 (contract-api rebuild).
+- app/docker-compose.yml — api env passthroughs: REQUEST_BASE_URL/IPS_BASE_URL/IPS_API_KEY/APP_VERSION (were defined in .env but never injected → PAT auto-provision hit localhost:9060). .env APP_VERSION=e2bc4c4.
+- app/backend/app/consent_emitter.py — send IPS auth as `Authorization: ApiKey <key>` (ips ignores X-API-Key → 401; same as #558). .env IPS_BASE_URL=host.docker.internal:9040 + IPS_API_KEY (minted ips ApiKey guid 41878bc0 for "contract.pdhc consent emitter"). Deployed 2026-08-15 (contract-api rebuild).

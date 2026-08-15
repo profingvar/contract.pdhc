@@ -13,7 +13,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt, jwt_required
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 
 from .config import Config
@@ -438,12 +438,26 @@ def create_app() -> Flask:
     @app.get("/fhir/Contract")
     @limiter.limit(app.config["READ_RATE_LIMIT"])
     def list_contracts():
+        # FHIR search paging: _count (1..200, default 50) + _offset. Without a
+        # cap the whole table is serialised on every call as contracts grow.
+        try:
+            count = min(max(int(request.args.get("_count", 50)), 1), 200)
+            offset = max(int(request.args.get("_offset", 0)), 0)
+        except (TypeError, ValueError):
+            count, offset = 50, 0
         with db_session() as s:
-            rows = s.scalars(select(ContractRecord).order_by(ContractRecord.updated_at.desc())).all()
+            total = s.scalar(select(func.count()).select_from(ContractRecord))
+            rows = s.scalars(
+                select(ContractRecord)
+                .order_by(ContractRecord.updated_at.desc())
+                .offset(offset)
+                .limit(count)
+            ).all()
             return jsonify(
                 {
                     "resourceType": "Bundle",
                     "type": "searchset",
+                    "total": total,
                     "entry": [{"resource": r.fhir_contract} for r in rows],
                 }
             )
