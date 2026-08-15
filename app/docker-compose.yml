@@ -47,6 +47,10 @@ services:
       SSO_CALLBACK_URL: ${SSO_CALLBACK_URL:-https://contract.pdhc.se/api/v1/auth/callback}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://contract.pdhc.se}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-}
+      REQUEST_BASE_URL: ${REQUEST_BASE_URL:-http://host.docker.internal:9060}
+      IPS_BASE_URL: ${IPS_BASE_URL:-}
+      IPS_API_KEY: ${IPS_API_KEY:-}
+      APP_VERSION: ${APP_VERSION:-dev}
     depends_on:
       db:
         condition: service_healthy
