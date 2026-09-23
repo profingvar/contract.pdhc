@@ -200,3 +200,7 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
 /Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/app/scope_validation.py
 /Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/app/signer_resolver.py
 /Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/tests/test_onboarding_enablers.py   (new)
+
+## #691 deploy 2026-09-23 — files copied to miserver (no local source change)
+- app/backend/app/{fhir,main,scope_validation,signer_resolver}.py
+- app/backend/tests/test_onboarding_enablers.py

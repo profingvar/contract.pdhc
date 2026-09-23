@@ -147,3 +147,32 @@ to be bidirectionally truthful.
 **NOT DEPLOYED.** Local only; contract.pdhc on miserver still runs the previous
 code. Colima is down on this laptop (macOS 27), so the containers were not
 exercised — tests run on sqlite.
+
+---
+
+## 2026-09-23 — #691: deployed #599 (onboard.pdhc OB-7 enablers)
+
+Deployed and verified live. `contract-api-1` rebuilt, healthy, `/health`
+200, no errors. Markers confirmed **inside the container**:
+`onboarding_terms` ×3 in `fhir.py`, `_skip_auto_provision` defined and
+guarding the provision call in `main.py`.
+
+This unblocks onboard.pdhc's `contract_writer`, which posts the negotiated
+FHIR Contract here with `X-Skip-Auto-Provision: 1`.
+
+### Pre-deploy check
+
+Prod was exactly one commit behind (`1f67a8e`) with a **clean** working
+tree. All four changed files were verified byte-identical to
+`local@1f67a8e` before overwriting — the 15 lines that looked "only on
+prod" in a first pass were simply the pre-#599 versions of modified lines,
+not server-only edits. The only prod-only file is a stray
+`main.py.before_version_edit` backup, left in place.
+
+No alembic/migrations in this service, so nothing to upgrade.
+
+Compose project is pinned `contract`; `docker-compose` (v1 CLI, compose
+5.1.4) — `docker compose` v2 is not available on the mini.
+
+Predeploy tar: `~/backups/predeploy/contract.pdhc/app_20260923T173327Z.tar.gz`
+Rollback image: `sha256:1286bd5a195dd`
