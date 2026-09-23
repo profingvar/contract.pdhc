@@ -24,9 +24,19 @@ _GUID_FROM_URL_RE = re.compile(r'/api/v1/concepts/([0-9a-fA-F\-]{36})$')
 
 
 def extract_scope_concept_guids(fhir_contract: dict) -> set[str]:
-    """Walk Contract.term[].asset[].typeReference[] and return concept GUIDs."""
+    """Walk Contract.term[].asset[].typeReference[] and return concept GUIDs.
+
+    Only the scope terms are walked. A contract may also carry an
+    `onboarding_terms` term (#599) whose assets reference webhooks and
+    people rather than concepts; anything there must never be sent to
+    plan.pdhc for concept-existence checking.
+    """
+    from app.fhir import SCOPE_TERM_TYPES
+
     guids: set[str] = set()
     for term in fhir_contract.get('term', []) or []:
+        if (term.get('type') or {}).get('text') not in SCOPE_TERM_TYPES:
+            continue
         for asset in term.get('asset', []) or []:
             for ref in asset.get('typeReference', []) or []:
                 reference = (ref or {}).get('reference', '')

@@ -90,3 +90,60 @@ This file tracks progress against `readme.md` step numbering (e.g. 1.a.1, 1.a.2,
 - Status: completed
 - Result: rewrote start.sh to match PDHC family patterns (request.pdhc, plan.pdhc, sso.pdhc). Changes: Colima-first Docker detection with Docker Desktop fallback (30s wait), DB backup before restart with gzip and rotation (keep 10), docker-compose binary detection (hyphenated for Mac Mini server, plugin for dev), health check wait loop (30 attempts), log tailing with graceful Ctrl+C shutdown, OBJC_DISABLE_INITIALIZE_FORK_SAFETY for macOS, detached mode (-d) with log follow, status banner with all URLs.
 
+
+---
+
+## 2026-09-23 — #599: contract.pdhc enablers for onboard.pdhc OB-7
+
+All four items delivered. 139 tests pass, up from a clean 116 baseline.
+
+**1. Server-side `?party=` and `?status=` on `GET /fhir/Contract`.** Every
+consumer previously pulled the whole searchset and filtered `party[]`
+client-side. `party` accepts either `Organization/<guid>` or a bare guid and
+matches any role. Note `Contract.party.reference` is 0..* — each party entry
+holds a LIST of references, which is why matching walks two levels.
+Implementation note: `party[]` lives inside the unindexed `fhir_contract` JSON
+blob, so filtering is done in Python — but BEFORE paging, or `total` and the
+page window would both be computed over the unfiltered set. There is a
+regression test for exactly that. The unfiltered path keeps its cheap SQL
+count+page and is untouched.
+
+**2. `onboarding_terms` term[].** Was hard-rejected: `ALLOWED_TERM_TYPES` was
+`frozenset({"request_scope","return_scope"})`. Three traps had to be handled,
+not just the allow-list:
+  - `ALLOWED_ASSET_TYPES[term_type]` is a bare dict lookup — adding the type to
+    the allow-list alone would have produced a KeyError, not a clean 400.
+  - `asset[]` was required non-empty for EVERY term.
+  - every `typeReference` had to match the concept-URL regex — but onboarding
+    assets reference webhooks and people, not concepts.
+So scope terms and onboarding terms now take separate validation paths:
+`SCOPE_TERM_TYPES` stays strict (it is a security boundary — what a provider
+may be asked for and must return), while `_validate_onboarding_term` checks
+structural shape only and leaves asset types open, so a newly agreed field
+does not need a contract.pdhc release. Stored verbatim.
+Both scope readers now skip it: `get_contract_scope` filters on
+`SCOPE_TERM_TYPES`, and `scope_validation.extract_scope_concept_guids` skips
+non-scope terms — otherwise plan.pdhc would have been asked to verify a
+webhook URL as a concept.
+
+**3. `X-Skip-Auto-Provision: 1` on `POST /fhir/Contract`** (OB-13 decision 1c).
+Skips the request.pdhc auto-provision call so onboard.pdhc, which mints the PAT
+itself, does not leave a second dangling token whose raw value nobody ever saw.
+Only reachable on a route already gated by `@require_role("admin")`.
+
+**4. Accepted signer party types documented** in `signer_resolver`'s module
+docstring, with the caveat stated plainly: `Organization/<guid>` is accepted on
+SHAPE ALONE and is not verified at all, internal or external. OB-7 can sign as
+`Organization/<payer>` and `Organization/<provider>` today with no change — but
+a typo in either guid is stored silently and surfaces later as a dangling
+reference. Making these resolve via sso `/api/public/organisations` is real
+hardening, not a blocker, and is not done here.
+
+**Also:** `party` and `status` are now advertised as `searchParam` in the
+CapabilityStatement. The code comment there said "Add entries here when search
+parameters are actually supported" — they now are, and Rule 20 requires the CS
+to be bidirectionally truthful.
+
+**NOT DEPLOYED.** Local only; contract.pdhc on miserver still runs the previous
+code. Colima is down on this laptop (macOS 27), so the containers were not
+exercised — tests run on sqlite.

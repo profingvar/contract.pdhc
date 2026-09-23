@@ -21,6 +21,30 @@ Resolution policy
   ``STRICT_SIGNER_VALIDATION``). Until an SSO client lands here,
   organisation signers are accepted on shape only.
 
+Accepted signer party types (#599 item 4)
+-----------------------------------------
+For a caller building ``signer[]`` for both sides of a contract — the
+onboarding app does this for the payer and an external provider — the
+resource types this verifier understands are:
+
+===================  ==========================================
+``Patient/``         resolved against IPS (404 rejects)
+``Practitioner/``    resolved against the local users table
+``User/``            resolved against the local users table
+``Organization/``    ACCEPTED ON SHAPE ALONE — see the caveat
+===================  ==========================================
+
+Anything else is rejected in strict mode and passed in lax mode.
+
+CAVEAT, stated plainly: ``Organization/<guid>`` is not verified at all
+today, internal or external. It is matched on the ``ResourceType/guid``
+shape and accepted. So an onboarding app CAN sign as
+``Organization/<payer>`` and ``Organization/<external provider>`` right
+now with no change here — but a typo in either guid will be stored
+silently and surface later as a dangling reference. Making these
+resolve (via sso ``/api/public/organisations``) is real hardening, not
+a blocker, and is tracked separately.
+
 Strict mode
 -----------
 ``STRICT_SIGNER_VALIDATION`` env (default true). When false, every

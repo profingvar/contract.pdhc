@@ -134,9 +134,30 @@ def build_capability_statement() -> dict[str, Any]:
                         "versioning": "no-version",
                         "readHistory": False,
                         "updateCreate": False,
-                        # `searchParam` omitted — FHIR forbids empty
-                        # arrays. Add entries here when search
-                        # parameters are actually supported.
+                        # #599 item 1: these are now actually supported, so
+                        # they are advertised — Rule 20 bidirectional
+                        # truthfulness. `party` and `status` filter
+                        # server-side; _count/_offset page.
+                        "searchParam": [
+                            {
+                                "name": "party",
+                                "type": "reference",
+                                "documentation": (
+                                    "GET /fhir/Contract?party=Organization/{guid} "
+                                    "— contracts naming this organisation in "
+                                    "party[].reference[]. A bare guid is also "
+                                    "accepted."
+                                ),
+                            },
+                            {
+                                "name": "status",
+                                "type": "token",
+                                "documentation": (
+                                    "GET /fhir/Contract?status={status} — exact "
+                                    "match on Contract.status."
+                                ),
+                            },
+                        ],
                         # Rollup #350 §2.1 — advertise the /scope
                         # endpoint that main.py:446 has served since
                         # before this rollup. Bidirectional truthfulness
@@ -350,12 +371,50 @@ _CONCEPT_URL_RE = re.compile(
     r"^https?://.+/api/v1/concepts/[0-9a-f\-]{36}$"
 )
 
-ALLOWED_TERM_TYPES = frozenset({"request_scope", "return_scope"})
+# The two term types that define concept scope. These are a security
+# boundary — what a provider may be asked for and must return — so their
+# asset types are a closed allow-list and every typeReference must be a
+# concept URL.
+SCOPE_TERM_TYPES = frozenset({"request_scope", "return_scope"})
+
+# #599 / onboard.pdhc OB-7: the onboarding app records what the two parties
+# agreed that is NOT concept scope — delivery mode, webhook URL, contacts,
+# SLA, go-live date — as one extra term. It is descriptive metadata, not a
+# security boundary, so it is validated loosely (see _validate_terms) and is
+# ignored by every scope reader.
+ONBOARDING_TERM_TYPE = "onboarding_terms"
+
+ALLOWED_TERM_TYPES = SCOPE_TERM_TYPES | frozenset({ONBOARDING_TERM_TYPE})
 
 ALLOWED_ASSET_TYPES = {
     "request_scope": frozenset({"outbound_concept"}),
     "return_scope": frozenset({"obligatory_return", "optional_return"}),
 }
+
+
+def _validate_onboarding_term(term: dict, i: int) -> None:
+    """Shape-check an `onboarding_terms` term (#599 item 2).
+
+    What the onboarding app records here — delivery mode, webhook URL,
+    contacts, SLA, go-live date — is descriptive, not a security boundary,
+    and is stored verbatim for the audit trail. So this deliberately does
+    NOT apply the scope rules: asset[] is optional, asset types are open
+    (a new agreed field must not need a contract.pdhc release), and
+    typeReference is not required to be a concept URL — these assets
+    reference webhooks and people, not concepts.
+
+    Only structural shape is enforced, so the stored resource stays valid
+    FHIR and every scope reader can walk it safely.
+    """
+    for key in ("asset", "valuedItem"):
+        if key not in term:
+            continue
+        entries = term.get(key)
+        if not isinstance(entries, list):
+            raise ValueError(f"term[{i}].{key} must be an array")
+        for j, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                raise ValueError(f"term[{i}].{key}[{j}] must be an object")
 
 
 def _validate_terms(terms: Any) -> None:
@@ -387,11 +446,17 @@ def _validate_terms(terms: Any) -> None:
             if not isinstance(term["offer"], dict):
                 raise ValueError(f"term[{i}].offer must be an object")
 
+        if term_type == ONBOARDING_TERM_TYPE:
+            _validate_onboarding_term(term, i)
+            continue
+
         # asset[] is required and must contain valid concept references
         assets = term.get("asset")
         if not isinstance(assets, list) or not assets:
             raise ValueError(f"term[{i}].asset must be a non-empty array")
 
+        # ALLOWED_ASSET_TYPES is keyed by term type; every type reaching here
+        # is a scope type, which always has an entry.
         allowed_types = ALLOWED_ASSET_TYPES[term_type]
         for j, asset in enumerate(assets):
             if not isinstance(asset, dict):
@@ -466,7 +531,9 @@ def get_contract_scope(fhir_contract: dict[str, Any]) -> dict[str, Any] | None:
 
     for term in terms:
         term_type = (term.get("type") or {}).get("text")
-        if term_type not in ALLOWED_TERM_TYPES:
+        # SCOPE_TERM_TYPES, not ALLOWED_TERM_TYPES: an onboarding_terms term
+        # is valid on the contract but contributes no concept scope (#599).
+        if term_type not in SCOPE_TERM_TYPES:
             continue
 
         concepts_by_asset_type: dict[str, list[dict[str, str]]] = {}

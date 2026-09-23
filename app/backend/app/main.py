@@ -198,6 +198,17 @@ def create_app() -> Flask:
             'detail': info.get('detail'),
         }), 503
 
+    def _skip_auto_provision():
+        """True when the caller asked us not to auto-provision a PAT (#599).
+
+        Header `X-Skip-Auto-Provision: 1` (also true/yes). Only honoured on
+        routes already gated by @require_role("admin"), so this is not a
+        privilege the header itself grants.
+        """
+        return (request.headers.get("X-Skip-Auto-Provision") or "").strip().lower() in (
+            "1", "true", "yes",
+        )
+
     def _auto_provision_pat(contract_resource):
         """Extract provider org from contract party[] and ask request.pdhc to auto-provision a PAT."""
         request_base = app.config.get("REQUEST_BASE_URL", "").rstrip("/")
@@ -435,6 +446,23 @@ def create_app() -> Flask:
     def capability_statement():
         return jsonify(build_capability_statement()), 200, {"Content-Type": "application/fhir+json"}
 
+    def _contract_has_party(contract_resource, party_ref):
+        """True if this Contract names `party_ref` in any party[].reference[].
+
+        FHIR Contract.party.reference is 0..*, so each party entry holds a
+        LIST of references, not one. Matching is exact on the full
+        "Organization/<guid>" string; a bare guid is also accepted since
+        callers commonly have only that.
+        """
+        want = party_ref.strip()
+        bare = want.split("/", 1)[1] if "/" in want else want
+        for party in contract_resource.get("party", []) or []:
+            for ref in party.get("reference", []) or []:
+                ref_str = (ref or {}).get("reference", "")
+                if ref_str == want or ref_str.endswith(f"/{bare}"):
+                    return True
+        return False
+
     @app.get("/fhir/Contract")
     @limiter.limit(app.config["READ_RATE_LIMIT"])
     def list_contracts():
@@ -445,20 +473,49 @@ def create_app() -> Flask:
             offset = max(int(request.args.get("_offset", 0)), 0)
         except (TypeError, ValueError):
             count, offset = 50, 0
+
+        # #599 item 1: server-side party[] and status filters. Every consumer
+        # previously pulled the whole searchset and filtered client-side.
+        party = (request.args.get("party") or "").strip()
+        status_filter = (request.args.get("status") or "").strip()
+
         with db_session() as s:
-            total = s.scalar(select(func.count()).select_from(ContractRecord))
-            rows = s.scalars(
-                select(ContractRecord)
-                .order_by(ContractRecord.updated_at.desc())
-                .offset(offset)
-                .limit(count)
-            ).all()
+            if not party and not status_filter:
+                # Unfiltered: keep the cheap SQL path — count + page in the DB.
+                total = s.scalar(select(func.count()).select_from(ContractRecord))
+                rows = s.scalars(
+                    select(ContractRecord)
+                    .order_by(ContractRecord.updated_at.desc())
+                    .offset(offset)
+                    .limit(count)
+                ).all()
+                resources = [r.fhir_contract for r in rows]
+            else:
+                # party[] is nested inside the fhir_contract JSON blob and is
+                # not indexed, so filtering happens in Python. It must happen
+                # BEFORE paging, or `total` and the page window would both be
+                # computed over the unfiltered set. Contracts are
+                # low-cardinality (roughly one per org relationship), and the
+                # unfiltered path above already counted the full table.
+                all_rows = s.scalars(
+                    select(ContractRecord)
+                    .order_by(ContractRecord.updated_at.desc())
+                ).all()
+                matched = [
+                    r.fhir_contract for r in all_rows
+                    if (not party or _contract_has_party(r.fhir_contract, party))
+                    and (not status_filter
+                         or r.fhir_contract.get("status") == status_filter)
+                ]
+                total = len(matched)
+                resources = matched[offset:offset + count]
+
             return jsonify(
                 {
                     "resourceType": "Bundle",
                     "type": "searchset",
                     "total": total,
-                    "entry": [{"resource": r.fhir_contract} for r in rows],
+                    "entry": [{"resource": res} for res in resources],
                 }
             )
 
@@ -606,7 +663,12 @@ def create_app() -> Flask:
                 return jsonify({"error": "conflict", "message": "Contract id already exists"}), 409
             s.add(ContractRecord(guid=guid, fhir_contract=resource))
             s.commit()
-        _auto_provision_pat(resource)
+        # #599 item 3 / onboard.pdhc OB-13 decision 1(c): an admin caller that
+        # mints the PAT itself opts out of auto-provisioning, so the contract
+        # is not left with a second, dangling token whose raw value nobody
+        # ever saw. Already admin-only via @require_role("admin").
+        if not _skip_auto_provision():
+            _auto_provision_pat(resource)
         _emit_consents_for_lifecycle(resource)
         return jsonify(resource), 201
 
