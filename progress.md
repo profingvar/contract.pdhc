@@ -176,3 +176,48 @@ Compose project is pinned `contract`; `docker-compose` (v1 CLI, compose
 
 Predeploy tar: `~/backups/predeploy/contract.pdhc/app_20260923T173327Z.tar.gz`
 Rollback image: `sha256:1286bd5a195dd`
+
+---
+
+## 2026-09-29 — #706: a sibling service can now write a Contract
+
+144 tests pass (+5). Found by onboard.pdhc's first end-to-end call, which
+reached `agree` and then failed at the contract write with
+`401 Missing Authorization Header`.
+
+### The gap
+
+`POST /fhir/Contract` is `@require_role("admin")`, i.e. `@jwt_required()`,
+and the only issuer of a contract.pdhc JWT is `/api/v1/auth/callback` — a
+**browser** redirect flow with CSRF state in a session. **There was no
+server-to-server path to it at all.**
+
+Meanwhile `require_service_key` and `INTERNAL_SERVICE_KEY` both already
+existed here and were **applied to nothing**. onboard was sending exactly
+the right credential at a door that had never been connected; its
+`CONTRACT_SERVICE_KEY` and this service's `INTERNAL_SERVICE_KEY` were
+already the same value.
+
+### The change
+
+`require_role(*roles, allow_service_key=False)`. When a route opts in, a
+valid `X-Service-Key` is accepted **as an alternative** to the JWT. Only
+`POST /fhir/Contract` opts in.
+
+Deliberately narrow:
+
+- A JWT caller is completely unaffected — the JWT path is unchanged and
+  still runs when no key is offered.
+- A caller with neither is still refused.
+- Routes that did not opt in still refuse the key. Tested.
+- An **empty** `INTERNAL_SERVICE_KEY` refuses rather than admitting an empty
+  header — the classic `"" == ""` hole. Tested.
+- Constant-time comparison.
+
+### Note for whoever reads this next
+
+This is the third time in a week that a service layer or a credential
+existed while the surface that would use it did not: onboard's request.pdhc
+client sent a header request.pdhc never accepted (#702), onboard's plan
+picker had no route (#703), and here a decorator guarded nothing. The tests
+pass in every case because they exercise the layer directly.

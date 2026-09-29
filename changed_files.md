@@ -204,3 +204,7 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
 ## #691 deploy 2026-09-23 — files copied to miserver (no local source change)
 - app/backend/app/{fhir,main,scope_validation,signer_resolver}.py
 - app/backend/tests/test_onboarding_enablers.py
+
+## #706 — service-key write path, 2026-09-29
+- /Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/app/main.py
+- /Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/tests/test_service_key_write.py (new)

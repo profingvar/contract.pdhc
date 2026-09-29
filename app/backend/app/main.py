@@ -6,9 +6,11 @@ import os
 import secrets
 import time
 from datetime import timedelta
+from functools import wraps
 
 import requests as http_requests
-from flask import Flask, jsonify, redirect, request, session
+
+from flask import Flask, g, jsonify, redirect, request, session
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt, jwt_required
 from flask_limiter import Limiter
@@ -83,17 +85,46 @@ def create_app() -> Flask:
             return "admin"
         return "reader"
 
-    def require_role(*roles: str):
-        def decorator(fn):
-            @jwt_required()
-            def wrapper(*args, **kwargs):
-                claims = get_jwt()
-                role = claims.get("role")
-                if role not in roles:
-                    return jsonify({"error": "forbidden"}), 403
-                return fn(*args, **kwargs)
+    def require_role(*roles: str, allow_service_key: bool = False):
+        """Require a local JWT carrying one of `roles`.
 
-            wrapper.__name__ = fn.__name__
+        `allow_service_key=True` additionally accepts a valid
+        `X-Service-Key` (#706). That path exists because a sibling service
+        cannot obtain a contract.pdhc JWT at all: the only issuer is
+        `/api/v1/auth/callback`, a browser redirect flow with CSRF state in
+        a session. onboard.pdhc writes the agreement it has just negotiated
+        and had nowhere to authenticate — it was sending the right
+        credential at a door that had never been connected, since
+        `require_service_key` and `INTERNAL_SERVICE_KEY` both already
+        existed and were applied to nothing.
+
+        The key is an ALTERNATIVE, never a replacement: a JWT caller is
+        unaffected, and a caller with neither is still refused. The key is
+        compared in constant time and is only honoured where a route opts
+        in, so it cannot silently widen anything else.
+        """
+        def decorator(fn):
+            @wraps(fn)
+            def wrapper(*args, **kwargs):
+                if allow_service_key:
+                    expected = app.config.get("INTERNAL_SERVICE_KEY") or ""
+                    provided = request.headers.get("X-Service-Key", "")
+                    if expected and provided and hmac.compare_digest(
+                            provided, expected):
+                        g.service_caller = True
+                        return fn(*args, **kwargs)
+
+                # No key, or not offered: fall through to the JWT path,
+                # which raises its own 401 when the header is missing.
+                @jwt_required()
+                def _jwt_path():
+                    claims = get_jwt()
+                    if claims.get("role") not in roles:
+                        return jsonify({"error": "forbidden"}), 403
+                    return fn(*args, **kwargs)
+
+                return _jwt_path()
+
             return wrapper
 
         return decorator
@@ -641,7 +672,7 @@ def create_app() -> Flask:
         return None
 
     @app.post("/fhir/Contract")
-    @require_role("admin")
+    @require_role("admin", allow_service_key=True)
     def create_contract():
         resource = request.get_json(force=True, silent=True) or {}
         try:
