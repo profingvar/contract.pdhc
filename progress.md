@@ -193,10 +193,20 @@ and the only issuer of a contract.pdhc JWT is `/api/v1/auth/callback` — a
 server-to-server path to it at all.**
 
 Meanwhile `require_service_key` and `INTERNAL_SERVICE_KEY` both already
-existed here and were **applied to nothing**. onboard was sending exactly
-the right credential at a door that had never been connected; its
-`CONTRACT_SERVICE_KEY` and this service's `INTERNAL_SERVICE_KEY` were
-already the same value.
+existed here, and the two services already held the same key value —
+onboard's `CONTRACT_SERVICE_KEY` and this service's `INTERNAL_SERVICE_KEY`
+match. So onboard was sending exactly the right credential at a door that
+did not accept it for writes.
+
+> **Correction (2026-09-29).** An earlier version of this entry, and the
+> commit message on the change, said `require_service_key` was "applied to
+> nothing". That is wrong: it guards
+> `GET /internal/contract/<guid>/scope` (main.py:613) and always has. The
+> error came from grepping for `_require_service_key` with a leading
+> underscore, finding nothing, and concluding the decorator was dead.
+>
+> The gap was real but narrower than described: there was a service-key path
+> for **reads** and none for **writes**.
 
 ### The change
 
