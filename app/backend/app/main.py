@@ -8,6 +8,16 @@ import time
 from datetime import timedelta
 from functools import wraps
 
+
+import re
+
+# #755: a FHIR Organization reference must carry a GUID. `Organization/None` is
+# what a Python None looks like after an f-string, and it reads as a legitimate
+# reference to everything downstream.
+_ORG_GUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
 import requests as http_requests
 
 from flask import Flask, g, jsonify, redirect, request, session
@@ -265,6 +275,22 @@ def create_app() -> Flask:
                 ref_str = ref.get("reference", "")
                 if ref_str.startswith("Organization/"):
                     provider_org_guid = ref_str.split("/", 1)[1]
+                    # #755: three live contracts carry `Organization/None` —
+                    # a Python None formatted straight into a FHIR reference by
+                    # whatever built them. Splitting on "/" yields the literal
+                    # string "None", and without this guard it is POSTed to
+                    # request.pdhc as the provider org, minting a Provider
+                    # Access Token bound to an organisation called "None".
+                    #
+                    # No such PAT exists today, so the risk was latent — but the
+                    # path is live and all three contracts are `executed`, which
+                    # is in the trigger list above.
+                    if not _ORG_GUID_RE.match(provider_org_guid):
+                        app.logger.warning(
+                            "contract %s names provider %r, which is not a GUID "
+                            "— refusing to auto-provision a PAT for it (#755)",
+                            contract_guid, ref_str)
+                        continue
                     try:
                         from .session_headers import outbound_session_headers
                         resp = http_requests.post(
