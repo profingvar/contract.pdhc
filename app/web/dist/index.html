@@ -625,7 +625,11 @@ function renderNav() {
     : `<div class="nav-user"><a href="${SSO_LOGIN_URL}" style="color:rgba(255,255,255,0.9)">Sign in</a></div>`;
 
   return `<nav>
-    <a class="brand" href="#/"><i data-lucide="file-signature"></i> Contracts <span>PDHC</span></a>
+    <div style="display:flex;align-items:center;gap:0.6rem;">
+      <a class="brand" href="https://www.pdhc.se/services.html" style="opacity:0.75;font-size:0.85em;">PDHC</a>
+      <span style="color:rgba(255,255,255,0.3);">/</span>
+      <a class="brand" href="#/"><i data-lucide="file-signature"></i> Contracts</a>
+    </div>
     <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><i data-lucide="menu"></i></button>
     <div class="nav-links">${links}</div>
     ${user}
