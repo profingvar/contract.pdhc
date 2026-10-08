@@ -381,7 +381,18 @@ def create_app() -> Flask:
     def sso_login():
         """H1 — redirect to SSO for authentication."""
         if app.config.get("AUTH_DISABLED"):
-            return jsonify({"message": "Auth disabled — use /auth/login for local auth"}), 200
+            # The SPA now NAVIGATES here rather than rendering a button, so a
+            # JSON body at this URL would put raw JSON in the browser window
+            # with no way back. Redirect onto the SPA's own stop-surface
+            # instead, which already knows how to display an `sso_error`.
+            #
+            # AUTH_DISABLED is local-dev only (Rule 23) and production is
+            # false, so this is about not leaving a dead end in dev — not
+            # about a production path.
+            base = os.getenv("PUBLIC_WEB_URL", "")
+            return redirect(
+                f"{base}/?sso_error=Auth+disabled+(AUTH_DISABLED%3Dtrue)"
+                "+%E2%80%94+no+SSO+handshake+in+local+dev")
         state = secrets.token_urlsafe(32)
         session["sso_state"] = state
         return redirect(get_sso_login_url(state))

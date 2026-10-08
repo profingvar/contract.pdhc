@@ -298,6 +298,54 @@ function saveAuth(token, role, email, userType) {
 }
 function isAdmin() { return state.role === "admin"; }
 function isLoggedIn() { return !!state.token; }
+
+// ──────────────────────────────────────────
+// SSO handshake — the platform standard
+// ──────────────────────────────────────────
+// Every sibling with a browser UI (analyse, rosetta, dashboard, onboard, plan)
+// does the same thing: an unauthenticated request to a protected page 302s to
+// its own /auth/login, which immediately redirects to SSO and comes back
+// authenticated. No intermediate page, no button, and a `next` so the user
+// lands where they were going. rosetta/app/routes/auth.py is the shortest
+// example:
+//
+//     @bp.get("/login")
+//     def login():
+//         ...
+//         return redirect(initiate_sso_login(next_url, state))
+//
+// contract was the odd one out: it rendered a local card with a "Sign in with
+// SSO" button, so reaching a protected page cost an extra click and looked
+// like a service with its own login rather than one behind platform SSO.
+//
+// The BACKEND handshake was already standard and is untouched:
+// /api/v1/auth/login -> sso.pdhc -> /api/v1/auth/callback -> redirect to
+// PUBLIC_WEB_URL with ?sso_token=<local jwt>. Only this client deviated.
+const SSO_LOGIN_URL = API + "/api/v1/auth/login";
+// How long a handshake may take before a fresh attempt is allowed. Guards the
+// one failure mode an auto-redirect introduces that a button cannot: if SSO
+// returns without a usable token, redirecting again immediately is an infinite
+// bounce the user cannot escape or read an error from.
+const SSO_ATTEMPT_WINDOW_MS = 30000;
+
+function ssoHandshakeInFlight() {
+  try {
+    const t = parseInt(sessionStorage.getItem("ssoAttemptAt") || "0", 10);
+    return t > 0 && (Date.now() - t) < SSO_ATTEMPT_WINDOW_MS;
+  } catch (e) { return false; }
+}
+
+// `next` equivalent: remember where the user was going so the callback can
+// return them there instead of dumping everyone on the dashboard.
+function ssoRedirect(intendedRoute) {
+  try {
+    if (intendedRoute && intendedRoute !== "/login") {
+      sessionStorage.setItem("ssoNext", intendedRoute);
+    }
+    sessionStorage.setItem("ssoAttemptAt", String(Date.now()));
+  } catch (e) { /* private mode — the handshake still works, `next` is lost */ }
+  window.location.assign(SSO_LOGIN_URL);
+}
 function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
 // SSO callback: check URL for sso_token or sso_error
@@ -308,9 +356,16 @@ function esc(s) { const d = document.createElement("div"); d.textContent = s; re
   if (ssoToken) {
     sessionStorage.setItem("token", ssoToken);
     state.token = ssoToken;
-    // Clean URL
-    history.replaceState(null, "", location.pathname + "#/dashboard");
-    state.route = "/dashboard";
+    // Clean URL, and return the user to where they were going rather than
+    // always the dashboard — the `next` half of the standard.
+    let dest = "/dashboard";
+    try {
+      dest = sessionStorage.getItem("ssoNext") || "/dashboard";
+      sessionStorage.removeItem("ssoNext");
+      sessionStorage.removeItem("ssoAttemptAt");
+    } catch (e) { /* ignore */ }
+    history.replaceState(null, "", location.pathname + "#" + dest);
+    state.route = dest;
     // Fetch user info
     fetch(API + "/api/v1/auth/me", { headers: { Authorization: "Bearer " + ssoToken } })
       .then(r => r.ok ? r.json() : null)
@@ -326,6 +381,13 @@ function esc(s) { const d = document.createElement("div"); d.textContent = s; re
     return;
   }
   if (ssoError) {
+    // Land on the card and STAY there. This is the surface that makes the
+    // auto-redirect safe: without somewhere to stop, a failing handshake
+    // would bounce forever and the user would never see why.
+    try {
+      sessionStorage.setItem("ssoLastError", decodeURIComponent(ssoError));
+      sessionStorage.removeItem("ssoAttemptAt");
+    } catch (e) { /* ignore */ }
     history.replaceState(null, "", location.pathname + "#/login");
     state.route = "/login";
     setTimeout(() => toast(decodeURIComponent(ssoError), "error"), 100);
@@ -340,7 +402,16 @@ async function api(path, opts = {}) {
   if (state.token) headers.Authorization = "Bearer " + state.token;
   try {
     const res = await fetch(API + path, { ...opts, headers });
-    if (res.status === 401 && state.token) { saveAuth(null, null, null, null); toast("Session expired — redirecting to sign-in", "error"); window.location.assign(API + "/api/v1/auth/login"); return { ok: false, status: 401, json: null }; }
+    if (res.status === 401 && state.token) {
+      // An expired token mid-session goes through the same helper as every
+      // other entry, so the user returns to the page they were on instead of
+      // the dashboard. Previously this assigned the login URL directly and
+      // lost the location.
+      saveAuth(null, null, null, null);
+      toast("Session expired — signing you in again", "error");
+      ssoRedirect(state.route);
+      return { ok: false, status: 401, json: null };
+    }
     const text = await res.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
@@ -480,7 +551,18 @@ function render() {
   const route = state.route;
   const app = document.getElementById("app");
 
-  if (route === "/login") { app.innerHTML = renderLogin(); bindLogin(); icons(); return; }
+  if (route === "/login") {
+    // The standard has no login PAGE: /auth/login is a redirect. So a visit
+    // here goes straight to SSO, and the card is shown only when there is a
+    // reason to stop — an error from the handshake, or an attempt already in
+    // flight. Those two cases are what keep this from being a bounce loop.
+    let lastErr = null;
+    try { lastErr = sessionStorage.getItem("ssoLastError"); } catch (e) {}
+    if (!lastErr && !ssoHandshakeInFlight()) { ssoRedirect(null); return; }
+    app.innerHTML = renderLogin(lastErr); bindLogin(); icons();
+    try { sessionStorage.removeItem("ssoLastError"); } catch (e) {}
+    return;
+  }
 
   const publicRoutes = ["/", "/contracts", "/docs", "/api"];
   const isPublicRoute = publicRoutes.includes(route) || route.startsWith("/contracts/");
@@ -491,7 +573,18 @@ function render() {
     icons();
     return;
   }
-  if (!isLoggedIn()) { navigate("/login"); return; }
+  if (!isLoggedIn()) {
+    // THE FIX. This used to `navigate("/login")` and render a card with a
+    // button. The siblings 302 to SSO here, carrying the intended page as
+    // `next`, so the user arrives signed in at the page they asked for.
+    // Public routes never reach this line — they are served above, and
+    // keeping them browsable without SSO is deliberate.
+    let lastErr = null;
+    try { lastErr = sessionStorage.getItem("ssoLastError"); } catch (e) {}
+    if (lastErr || ssoHandshakeInFlight()) { navigate("/login"); return; }
+    ssoRedirect(route);
+    return;
+  }
 
   let content = "";
   if (route === "/" || route === "/dashboard") content = renderDashboard();
@@ -529,7 +622,7 @@ function renderNav() {
   const displayName = state.email || state.userType || "user";
   const user = auth
     ? `<div class="nav-user"><span>${esc(displayName)}</span><span class="role-tag">${state.role}</span><button onclick="logout()">Logout</button></div>`
-    : `<div class="nav-user"><a href="#/login" style="color:rgba(255,255,255,0.9)">Login</a></div>`;
+    : `<div class="nav-user"><a href="${SSO_LOGIN_URL}" style="color:rgba(255,255,255,0.9)">Sign in</a></div>`;
 
   return `<nav>
     <a class="brand" href="#/"><i data-lucide="file-signature"></i> Contracts <span>PDHC</span></a>
@@ -542,12 +635,18 @@ function renderNav() {
 // ──────────────────────────────────────────
 // Login
 // ──────────────────────────────────────────
-function renderLogin() {
+// Not the normal way in any more — the normal way is a redirect. This is the
+// STOP surface for a handshake that failed or is already in flight, which is
+// what makes the auto-redirect safe to do at all.
+function renderLogin(errorText) {
+  const problem = errorText
+    ? `<div class="flash flash-error" style="margin-bottom:1rem">${esc(errorText)}</div>`
+    : `<p class="text-muted" style="text-align:center;margin-bottom:1rem">Sign-in is already in progress. If nothing happened, try again.</p>`;
   return `<div class="login-wrap"><div class="card login-card">
     <h1>Contracts <span>PDHC</span></h1>
-    <p class="text-muted" style="text-align:center;margin-bottom:1rem">Sign in via PDHC SSO to manage contracts.</p>
+    ${problem}
     <div class="btn-group" style="flex-direction:column">
-      <a class="btn btn-primary" href="${API}/api/v1/auth/login" style="width:100%;justify-content:center;text-decoration:none"><i data-lucide="log-in"></i> Sign in with SSO</a>
+      <a class="btn btn-primary" href="${SSO_LOGIN_URL}" style="width:100%;justify-content:center;text-decoration:none"><i data-lucide="log-in"></i> Sign in with PDHC SSO</a>
       <button class="btn btn-secondary" onclick="navigate('/contracts')" style="width:100%;justify-content:center">Browse contracts (public)</button>
     </div>
   </div></div>`;
