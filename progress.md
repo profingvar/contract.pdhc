@@ -288,3 +288,87 @@ older than local. Predeploy backup:
 `docker-compose up -d --build` (no bind mount — source is baked into the image,
 so a restart alone would have run the old code). In-image hash
 `6c21202087b8099c` = local HEAD. `/health`: `status ok`, `database connected`.
+
+## #708 — sibling smoke for contract.pdhc (2026-10-08)
+
+`deploy/smoke_siblings.sh` + `deploy/smoke_siblings.py`. Read-only by default;
+everything that writes is behind `--for-real`, and the script names what it
+created.
+
+**Why it runs inside the container.** `IPS_BASE_URL` is
+`http://host.docker.internal:9040` and `REQUEST_BASE_URL` is
+`host.docker.internal:9060` — meaningful in `contract-api-1` and nowhere else.
+A smoke run from a laptop would exercise a different client than the one
+serving production. The wrapper `docker exec`s it; `deploy/` is not copied into
+contract's image (the Dockerfile ships only `app/backend` to `/srv`), so the
+script is piped over stdin.
+
+**Why it builds requests with contract's own helpers.** `_ips_headers()`,
+`_sso_cfg()`, `_ips_base()`. #800 *was* a bug in `_ips_headers`; a smoke that
+composed its own headers would have been green against it.
+
+**The central distinction.** Every check separates two answers that look alike
+in a log and mean opposite things:
+
+| answer | meaning |
+|---|---|
+| 401 / 403 | our credential or header name is wrong |
+| 404 | the credential WORKED; the resource is simply absent |
+
+Probing a deliberately absent-but-well-formed guid turns each edge into a
+credential test with no side effects — including the write edge, checked via
+`GET /internal/service-request/<absent>/context`, which carries the same
+blueprint, the same `@requires_service_key` and the same `INTERNAL_SERVICE_KEY`
+as `auto-provision-pat` but writes nothing.
+
+**Six edges, four siblings:**
+
+| sibling | route | caller | verdict |
+|---|---|---|---|
+| sso | `GET /api/public/organisations` | `sso.py` | 200 |
+| sso | `GET /api/auth/me/service` | `sso.py` | 401 on a junk token (correct) |
+| ips | `GET /api/v1/patients/<g>/clinics` | `signer_resolver.py` | 404 absent / 200 real |
+| ips | `GET /api/v1/patients/<g>/consents` | `consent_emitter.py` | 404 |
+| plan | `GET /api/v1/concepts/<g>` | `scope_validation.py` | 404, unauthenticated by design |
+| request | `POST /internal/auto-provision-pat` | `main.py` | **401 — see #802** |
+
+**It found a live defect on its first run.** contract's and request's
+`INTERNAL_SERVICE_KEY` differ (both set, both 64 chars, sha256 `773a030c` vs
+`2d172e9a`), so PAT auto-provisioning has been failing — and silently, because
+`main.py` logs `resp.status_code` at `info()` without checking it. A 401 reads
+as an ordinary log line and the loop continues. Only `RequestException` is
+warned about, so a transport failure is louder than an auth failure. Operator
+`.env` fix, filed as **#802**.
+
+**A note on the two ips callers.** This repo held the bug and its fix at the
+same time: `consent_emitter._ips_headers` sent `Authorization: ApiKey` and even
+cited the request.pdhc precedent, while `signer_resolver._ips_headers` sent
+`X-API-Key` to the same service. No unit test in either file could see the
+difference. The smoke now checks both so they cannot silently diverge again.
+
+### The path guard, and why the first version of it was worthless
+
+`app/backend/tests/test_smoke_siblings_paths.py` asserts every path the smoke
+probes appears in the client module that builds it — the guard gateway's smoke
+docstring advertises as `TestPathsMatchTheClients`, which does not exist by that
+name (the real one is an inline `@check`; see #804).
+
+The first version used `frag in src` and was useless: it passes
+`/patients/%s/clinics` against a client calling
+`/api/v1/patients/{guid}/clinics`, because the truncation is a substring of the
+original. That is the precise bug gateway's docstring cites
+(`fhir/Observation` vs `/api/v1/fhir/Observation`). The first fragment is now
+anchored to a `}` or quote boundary, and the truncated path fails — verified by
+introducing the truncation and watching it fail, not by reasoning.
+
+156 passed. `tests/test_provider_ref_guard.py` still errors at collection on
+missing env; pre-existing, unrelated.
+
+### Status of #708 overall — still OPEN
+
+Three of ~20 services have a sibling smoke: `analyse.pdhc` (8 checks),
+`gateway.pdhc` (9 checks), `contract.pdhc` (6 edges). `onboard.pdhc` has the
+richer `deploy/full_call.sh` that the ticket cites as the precedent. Both
+pre-existing smokes were run against production today and pass. The ticket is
+explicitly incremental ("one service at a time, starting with whichever is next
+to be deployed"), so it stays open.
