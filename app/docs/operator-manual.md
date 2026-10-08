@@ -46,6 +46,38 @@ The list below reflects the actual variables read by `config.py`, `main.py`, and
 **Service-to-service integration:**
 
 - **`INTERNAL_SERVICE_KEY`** — shared secret for `X-Service-Key` on the internal scope endpoint, for PAT auto-provisioning to request.pdhc, and as the fallback key for IPS consent calls. Empty by default; the internal scope endpoint rejects **all** callers when it is unset.
+
+    !!! danger "It must equal request.pdhc's `INTERNAL_SERVICE_KEY`"
+        PAT auto-provisioning is validated by request.pdhc's own
+        `@requires_service_key` gate, and the same key guards three further
+        internal routes there. **The value therefore belongs to request, and
+        contract must be aligned to it — not the reverse**; changing request's
+        would break its other callers.
+
+        When the two drift, `POST /internal/auto-provision-pat` returns
+        `401 {"error":"unauthorized"}` and **nothing surfaces it**: `main.py`
+        logs `resp.status_code` at `info()` without checking it, so the
+        failure appears as an ordinary informational line and the loop moves
+        on. Only `RequestException` is warned about, which makes a network
+        failure louder than an auth failure.
+
+        The downstream symptom is confusing rather than obvious — an external
+        provider is told *"Token not found"*, and the natural assumption is
+        that the provider is misconfigured. Found live on 2026-10-08 (#802):
+        both keys set, both 64 characters, different values.
+
+        Check without printing either value:
+
+        ```bash
+        for c in contract-api-1 request_pdhc_app; do
+          v=$(docker exec "$c" printenv INTERNAL_SERVICE_KEY)
+          echo "$c len=${#v} sha256=$(printf %s "$v" | shasum -a 256 | cut -c1-12)"
+        done
+        ```
+
+        After changing it, bring the container up with `docker-compose up -d`.
+        **`docker restart` keeps create-time environment** and would appear to
+        do nothing.
 - **`REQUEST_BASE_URL`** — request.pdhc base, default `http://localhost:9060`. Target for PAT auto-provisioning.
 - **`IPS_BASE_URL`** — ips.pdhc base. **Empty by default, which makes consent emission a no-op** (local dev / standalone install).
 - **`IPS_API_KEY`** — key for IPS consent calls; optional. When absent, the emitter falls back to `INTERNAL_SERVICE_KEY`.
@@ -146,6 +178,24 @@ The flow:
 
 `GET /api/v1/auth/me` returns the current user's claims; `GET /api/v1/auth/logout` clears the session.
 
+**What a user sees.** There is no login page. Opening a protected page redirects
+straight to sso.pdhc and returns the user signed in, at the page they asked for
+— the same behaviour as every other PDHC frontend. The public pages (`/`,
+`/contracts`, `/docs`, `/api`) stay readable without signing in.
+
+A sign-in card appears only when the handshake **fails** — it carries the
+`sso_error` text and a retry button. If a user reports seeing it, the message on
+it is the diagnosis; read that before checking anything else.
+
+Every page carries the platform ribbon `PDHC / Contracts` in the top left;
+`PDHC` returns to <https://www.pdhc.se/services.html>.
+
+!!! note "`AUTH_DISABLED=true` (dev only)"
+    `GET /api/v1/auth/login` redirects to the SPA's error surface saying auth is
+    disabled, rather than returning JSON. The SPA navigates to that URL by
+    itself now, and a JSON body there would be displayed raw in the browser
+    with no way back.
+
 ### 4.2 Role derivation
 
 Roles come from the SSO access blob, not from a local user table:
@@ -200,6 +250,44 @@ python -m pytest tests/ -v
 
 If a test-results convention is used, outputs follow `./results/<ISO-8601-UTC>_results/`.
 
+### 6.1 The sibling smoke — run this before a deploy (#708)
+
+The unit suite cannot tell you whether this service can still talk to the four
+it depends on, and in this repo it demonstrably did not: all 24 of the signer
+resolution tests passed for months while the code called a route that does not
+exist with a header ips does not read. Every one of them patched
+`requests.get` and asserted on the status code it had itself chosen, so the URL
+and the headers were inputs the mock discarded.
+
+```bash
+./deploy/smoke_siblings.sh --remote --patient-guid <a-really-assigned-patient>
+```
+
+**Read-only.** It changes nothing, on any service, and says so at the end.
+Everything that writes is behind `--for-real`, which additionally needs
+`--provider-org-guid` and `--contract-guid` and names the PAT it minted.
+
+It runs **inside `contract-api-1`**, because that is the only place the real
+configuration resolves — `IPS_BASE_URL` is `host.docker.internal:9040`, which
+means nothing from a laptop — and it builds each request with this service's
+**own** client helpers, so a bug in a helper is a bug in the smoke's request
+too. That is deliberate: #800 was a bug inside `_ips_headers`, and a smoke that
+composed its own headers would have passed against it.
+
+How to read the output:
+
+| result | meaning |
+|---|---|
+| **404** on an absent-guid probe | PASS — the credential was accepted, the row simply is not there |
+| **401 / 403** | our credential or header name is wrong; the sibling is up and refused us |
+| **5xx** | the sibling errored; check its logs, and whether our request is malformed |
+| UNREACHABLE | network or base URL, not credentials |
+
+`--patient-guid` matters more than it looks. Without it every ips check is
+satisfied by a 404 — **including the 404 that a wrong route produces for every
+guid**. Only a patient that really exists distinguishes "the route is wrong"
+from "that guid is absent".
+
 ---
 
 ## 7) Common failures
@@ -247,4 +335,23 @@ See CLAUDE.md §9 for the full write-up.
 
 - **`422 scope_concept_missing`** — a concept GUID in `term[]` doesn't exist in plan.pdhc. Fix the reference or create the concept.
 - **`503 scope_validation_unavailable`** — plan.pdhc is unreachable and `STRICT_SCOPE_CONCEPTS=true`. Restore plan.pdhc, or set the flag `false` in local dev.
-- **`400 signer_unresolved`** — a `signer[]` reference doesn't resolve and `STRICT_SIGNER_VALIDATION=true`. Fix the reference or relax the flag in local dev.
+- **`400 signer_unresolved`** — a `signer[]` reference doesn't resolve and `STRICT_SIGNER_VALIDATION=true` (which is the **default**, and is unset in production, so it is on).
+
+    **Before blaming the reference, check that the probe can authenticate.**
+    Between the introduction of this check and 2026-10-08 the message was
+    almost always wrong: the resolver called an ips route that does not exist
+    with a header ips does not read, so *every* `Patient/<guid>` signer failed,
+    including ones that were perfectly valid (#800). The error says "not found
+    in IPS", which reads as a statement about the patient.
+
+    The distinction that separates the two causes:
+
+    | probing a deliberately absent guid returns | means |
+    |---|---|
+    | **404** | the credential was accepted — the reference really is missing, so fix the reference |
+    | **401 / 403** | our credential or header name is wrong — this is not the patient's fault |
+
+    `./deploy/smoke_siblings.sh --remote --patient-guid <a-real-guid>` makes
+    that call for you and says which it is. Relaxing
+    `STRICT_SIGNER_VALIDATION` is a local-dev convenience, not a fix: in
+    production it would accept signers that point at nothing.

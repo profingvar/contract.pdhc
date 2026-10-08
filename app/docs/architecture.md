@@ -126,10 +126,45 @@ Every port is pinned to `127.0.0.1` (ticket #72) so only the reverse proxy — n
 
 **Outbound** (the Contract Manager calls, as side effects of a write):
 
-- **sso.pdhc** — `GET /api/auth/me/service` to validate a login token.
-- **plan.pdhc** — `GET /api/v1/concepts/<guid>` to verify scope concepts exist.
-- **ips.pdhc** — `POST /api/v1/patients/<guid>/consents` (grant) and `.../consents/<guid>/revoke` (revoke) for auto-emitted consents.
-- **request.pdhc** — `POST /api/v1/internal/auto-provision-pat` to provision a PAT for the provider org (the PAT itself is owned by request.pdhc).
+| sibling | route | auth header | purpose |
+|---|---|---|---|
+| sso.pdhc | `GET /api/auth/me/service` | `Authorization: Bearer` + `X-SSO-Client-Id` / `X-SSO-Client-Secret` | validate a login token |
+| sso.pdhc | `GET /api/public/organisations` | none (public) | resolve an `Organization` signer |
+| plan.pdhc | `GET /api/v1/concepts/<guid>` | **none, deliberately** | verify a scope concept exists |
+| ips.pdhc | `GET /api/v1/patients/<guid>/clinics` | `Authorization: ApiKey` | does this Patient signer exist |
+| ips.pdhc | `GET\|POST /api/v1/patients/<guid>/consents`, `.../consents/<guid>/revoke` | `Authorization: ApiKey` | auto-emitted consents |
+| request.pdhc | `POST /api/v1/internal/auto-provision-pat` | `X-Service-Key` | provision a PAT for the provider org (the PAT is owned by request.pdhc) |
+
+Three details on that table are load-bearing, and each was a live defect:
+
+**ips reads `Authorization` and nothing else.** Its `require_auth` ignores
+`X-API-Key` silently and answers *"Missing Authorization header"* — a 401
+naming an absent credential for a request carrying a valid one. The signer
+probe sent `X-API-Key` until #800 and so refused every Patient signer.
+
+**The signer probe is `/clinics`, not `/api/v1/patients/<guid>`.** ips has no
+such route, so the old URL returned 404 for every guid — indistinguishable, to
+the caller, from a patient who does not exist. `/clinics` answers exactly the
+question asked (200 + list when present, 404 when not) and carries
+`@require_auth` only, with no clinic-relationship check, which is why a service
+key may use it.
+
+**plan's concept read is unauthenticated on purpose.** plan's capability
+statement marks `GET /concepts/<guid>` as `auth=False`. A 401/403 here means
+plan started requiring auth and this edge has broken.
+
+**`INTERNAL_SERVICE_KEY` must equal request.pdhc's.** It is request's own
+`@requires_service_key` gate that validates it, and the same key guards three
+other internal routes there, so the value belongs to request and contract must
+match it — not the reverse. When the two drift, PAT provisioning 401s and
+`main.py` logs the status at `info()` **without checking it**, so the failure
+reads as an ordinary log line and the loop continues. See #802.
+
+Verify all six edges against the running platform with
+`./deploy/smoke_siblings.sh --remote --patient-guid <guid>` (#708). It is
+read-only, builds each request with this service's own client helpers, and
+reads a 401/403 as "our credential is wrong" versus a 404 as "the credential
+worked, the row is absent" — the distinction that hid #800 for months.
 
 This internal/outbound layer is separate from the public FHIR API and the SSO-authenticated write API.
 
@@ -155,6 +190,37 @@ Production runs with `AUTH_DISABLED=false`. The SPA never handles a password.
 3. The callback validates `state`, then calls `sso.pdhc /api/auth/me/service` (headers `X-SSO-Client-Id` / `X-SSO-Client-Secret`) to validate the token and obtain the **access blob**.
 4. If `blob.must_change_password` is set, redirect to `SSO_BASE_URL/change-password` and mint nothing.
 5. Otherwise derive a role from the blob (§5.2), mint an 8-hour local JWT with the derived role plus reform/legacy identity claims (`organization_ids`/`care_unit_guids`, `effective_phases`/`session_phases`, `is_su_admin`, `user_type`, …), and redirect to `PUBLIC_WEB_URL/?sso_token=<jwt>`.
+
+#### How the SPA enters the handshake
+
+The five steps above are the server half and have always been standard. The
+client half was not: until 2026-10-08 an unauthenticated visit to a protected
+route rendered a local card with a "Sign in with SSO" button, so signing in
+cost an extra click and the service looked like it had a login of its own.
+
+It now behaves like every sibling frontend (analyse, rosetta, dashboard,
+onboard, plan), which 302 to their login route and straight on to SSO:
+
+1. A protected route with no token calls `ssoRedirect(route)`, which stores the
+   intended route and navigates to `/api/v1/auth/login`.
+2. The callback lands on `PUBLIC_WEB_URL/?sso_token=…`, and the SPA returns the
+   user to **that stored route** rather than always the dashboard — the `next`
+   equivalent.
+3. A 401 on any later API call goes through the same helper, so a mid-session
+   expiry returns the user to the page they were on.
+
+**Public routes are unaffected.** `/`, `/contracts`, `/docs` and `/api` remain
+browsable with no SSO, by design; the gate is reached only by routes that were
+already protected.
+
+The login card still exists, as the **stop surface**. An auto-redirect
+introduces one failure a button cannot: if the handshake returns without a
+usable token, redirecting again immediately is a loop the user can neither
+escape nor read an error from. So the card is shown only when there is a reason
+to stop — an `sso_error` came back, or an attempt is already in flight (30 s
+window). For the same reason `GET /api/v1/auth/login` under
+`AUTH_DISABLED=true` now redirects onto that surface instead of returning a
+JSON body, which the browser would have displayed with no way back.
 
 `GET /api/v1/auth/me` echoes the JWT claims; `GET /api/v1/auth/logout` clears the session.
 
