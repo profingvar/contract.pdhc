@@ -231,3 +231,60 @@ existed while the surface that would use it did not: onboard's request.pdhc
 client sent a header request.pdhc never accepted (#702), onboard's plan
 picker had no route (#703), and here a decorator guarded nothing. The tests
 pass in every case because they exercise the layer directly.
+
+## #800 — Patient signer resolution was rejecting every existing patient (2026-10-08)
+
+**Symptom in production:** any contract naming a `Patient/<guid>` signer was
+refused with `signer_unresolved` → `"Patient/<guid> not found in IPS"`, for
+patients that exist in ips.
+
+**Cause — two faults on one call, either sufficient alone:**
+
+1. `_resolve_patient` GET `{IPS_BASE_URL}/api/v1/patients/<guid>`. ips has no
+   such route, so Flask answered **404 for every guid** — indistinguishable,
+   to this function, from "no such patient".
+2. `_ips_headers` sent the key as `X-API-Key`. ips's `require_auth` reads
+   **only** `Authorization` and answers `401 "Missing Authorization header"`.
+
+`_strict_mode()` defaults **True** and `STRICT_SIGNER_VALIDATION` is unset in
+production, so both became a hard rejection rather than a logged warning.
+
+**Fix:** probe `GET /api/v1/patients/<guid>/clinics` — it answers exactly the
+question asked (200 + list when the patient exists, 404 when not) and carries
+`@require_auth` only, with no `_can_act_on_patient`, which is why a service key
+may use it (unlike `/blocks`, see #801). Key sent as `Authorization: ApiKey`.
+
+**No credential was minted.** contract's existing 64-char `IPS_API_KEY` was
+valid throughout; it had simply been sent under a name ips does not read.
+
+**Tests.** All 24 pre-existing resolution tests pass *with the bug in place*:
+each patches `http_requests.get` and asserts on the status code it chose to
+return, so the URL and the headers are inputs the mock throws away. Added
+`TestIpsWireShape`, which asserts the wire shape — exact URL, exact header name
+and scheme. Two of its three tests fail against the old code (verified by
+reverting, not assumed). 147 passed.
+`tests/test_provider_ref_guard.py` errors at collection on a missing
+`JWT_SECRET_KEY`/`DATABASE_URL`; pre-existing, confirmed at HEAD, unrelated.
+
+**Live verification** from inside `contract-api-1` after the rebuild — the
+ticket explicitly asked for this rather than a mocked 200:
+
+```
+ips base   : http://host.docker.internal:9040
+strict mode: True
+auth header: ApiKey, key length 64; X-API-Key present: False
+real guid 8f83e561-5ff8-495a-8d5c-13368007426b -> RESOLVED
+guid 00000000-0000-0000-0000-000000000000      -> still REJECTED
+```
+
+The second guid matters as much as the first: the gate still denies. A fix that
+made every patient resolve would have been worse than the defect.
+
+**Deploy.** Commit `2b56f07`. The deployed file was byte-identical to the
+pre-change baseline (`c4124577`), so nothing server-side-only was overwritten —
+prod `git status` showed ` M`, but only against prod HEAD `1f67a8e`, which is
+older than local. Predeploy backup:
+`~/backups/predeploy/contract.pdhc/signer_resolver.py.800.bak`. Rebuilt with
+`docker-compose up -d --build` (no bind mount — source is baked into the image,
+so a restart alone would have run the old code). In-image hash
+`6c21202087b8099c` = local HEAD. `/health`: `status ok`, `database connected`.
