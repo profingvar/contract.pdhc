@@ -210,3 +210,5 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
 - /Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/tests/test_service_key_write.py (new)
 - app/backend/app/main.py (#755 — refuse a non-GUID provider reference)
 - app/backend/tests/test_provider_ref_guard.py (#755)
+/Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/app/signer_resolver.py
+/Users/martiningvar/T7_sidewinder/contract.pdhc/app/backend/tests/test_signer_validation.py

@@ -443,3 +443,126 @@ class TestRoute400Shape:
         assert body["error"] == "signer_unresolved"
         assert isinstance(body["failures"], list)
         assert len(body["failures"]) >= 1
+
+
+class TestIpsWireShape:
+    """#800: the two faults the mocked-200 tests above could never catch.
+
+    Every test in `TestIpsPatientResolution` patches `http_requests.get` and
+    asserts on the status code it chose to return. That exercises the
+    BRANCHING and nothing else — the URL and the headers are inputs the mock
+    ignores, so both could be, and both were, wrong for months:
+
+      * the URL was `/api/v1/patients/<guid>`, a route ips does not have
+      * the auth header was `X-API-Key`, which ips's `require_auth` does not
+        read (it reads `Authorization` only, and answers "Missing
+        Authorization header")
+
+    Either alone made `_resolve_patient` return "not found in IPS" for a
+    patient that exists, and `_strict_mode()` defaults True, so every contract
+    with a `Patient/<guid>` signer was rejected.
+
+    These tests therefore assert what goes ON THE WIRE. That is the part the
+    other side actually sees, and asserting it is the only way a repo can
+    defend a cross-service contract it cannot import.
+
+    Checked against the live service on 2026-10-08 from inside
+    `contract-api-1`, with contract's own `IPS_API_KEY`:
+        X-API-Key                -> 401 Missing Authorization header
+        Authorization: ApiKey …  -> 200 [{"guid": …, "created_at": …}]
+    """
+
+    def test_probe_url_is_the_clinics_route(self, app, monkeypatch):
+        """The existence probe must hit a route ips HAS.
+
+        `/clinics` is also the right *question*: 200 + list when the patient
+        exists, 404 when not. `/api/v1/patients/<guid>` answers 404 for every
+        guid because Flask has no rule for it — indistinguishable, to this
+        function, from a patient that does not exist.
+        """
+        from app import signer_resolver
+
+        seen = {}
+
+        def fake_get(url, **kw):
+            seen["url"] = url
+            seen["headers"] = kw.get("headers") or {}
+            return _Resp(200)
+
+        monkeypatch.setattr(signer_resolver.http_requests, "get", fake_get)
+        monkeypatch.setenv("IPS_BASE_URL", "http://ips.test")
+        monkeypatch.setenv("IPS_API_KEY", "k" * 64)
+
+        with app.app_context():
+            reason = signer_resolver._resolve_patient("abc-123", strict=True)
+
+        assert reason is None
+        assert seen["url"] == "http://ips.test/api/v1/patients/abc-123/clinics"
+        # Guard the specific regression, not just the happy string: the bare
+        # patient route must not come back.
+        assert not seen["url"].endswith("/patients/abc-123")
+
+    def test_key_is_sent_as_authorization_apikey(self, app, monkeypatch):
+        """ips reads `Authorization` and nothing else.
+
+        `X-API-Key` must NOT be the only credential header, because ips
+        ignores it silently — a 401 that names a missing header, for a request
+        that carried a perfectly valid key.
+        """
+        from app import signer_resolver
+
+        seen = {}
+
+        def fake_get(url, **kw):
+            seen["headers"] = kw.get("headers") or {}
+            return _Resp(200)
+
+        monkeypatch.setattr(signer_resolver.http_requests, "get", fake_get)
+        monkeypatch.setenv("IPS_BASE_URL", "http://ips.test")
+        monkeypatch.setenv("IPS_API_KEY", "secret-key-value")
+
+        with app.app_context():
+            signer_resolver._resolve_patient("abc-123", strict=True)
+
+        h = seen["headers"]
+        assert h.get("Authorization") == "ApiKey secret-key-value"
+        # The scheme matters as much as the header name: ips accepts `Bearer`
+        # and `ApiKey`, and a bare key with no scheme is rejected.
+        assert h["Authorization"].split(" ", 1)[0] in ("ApiKey", "Bearer")
+        assert "X-API-Key" not in h or h.get("Authorization")
+
+    def test_no_key_configured_sends_no_authorization(self, app, monkeypatch):
+        """Absent key -> no header, rather than `ApiKey ` with an empty value.
+
+        An empty-valued scheme is worse than nothing: ips would read it,
+        fail to match it, and report bad credentials instead of absent ones.
+        """
+        from app import signer_resolver
+
+        seen = {}
+
+        def fake_get(url, **kw):
+            seen["headers"] = kw.get("headers") or {}
+            return _Resp(200)
+
+        monkeypatch.setattr(signer_resolver.http_requests, "get", fake_get)
+        monkeypatch.setenv("IPS_BASE_URL", "http://ips.test")
+        monkeypatch.delenv("IPS_API_KEY", raising=False)
+
+        with app.app_context():
+            app.config.pop("IPS_API_KEY", None)
+            app.config.pop("INTERNAL_SERVICE_KEY", None)
+            signer_resolver._resolve_patient("abc-123", strict=True)
+
+        assert "Authorization" not in seen["headers"]
+
+
+class _Resp:
+    """Minimal stand-in for a requests Response."""
+
+    def __init__(self, status_code, payload=None):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else []
+
+    def json(self):
+        return self._payload

@@ -115,7 +115,16 @@ def _ips_headers() -> dict:
         or ""
     )
     if key:
-        h["X-API-Key"] = key
+        # #800: this sent `X-API-Key`, which ips IGNORES SILENTLY — its
+        # require_auth reads only `Authorization` and answers "Missing
+        # Authorization header". Verified against the live service with this
+        # very key: X-API-Key -> 401, `Authorization: ApiKey <same key>` ->
+        # 200. The credential was always valid; it was sent under a name ips
+        # does not read.
+        #
+        # The same two-mistake pattern as #730 (cdr1's consent gate) and #783
+        # (cdr_6's spärr check): a header the target does not read.
+        h["Authorization"] = f"ApiKey {key}"
     h.update(outbound_session_headers())
     return h
 
@@ -128,7 +137,17 @@ def _resolve_patient(guid: str, *, strict: bool) -> Optional[str]:
         # Local dev / standalone install — skip silently. The #231
         # auto-emit path uses the same convention.
         return None
-    url = f"{base}/api/v1/patients/{guid}"
+    # #800: this was `/api/v1/patients/{guid}`, which ips DOES NOT HAVE —
+    # confirmed against its live URL map. So every patient resolved as "not
+    # found in IPS", including ones that exist, and with STRICT_SIGNER_
+    # VALIDATION defaulting to True that rejected the contract.
+    #
+    # `/clinics` is the right probe and answers exactly the question this
+    # function asks: 200 with a list (possibly empty) when the patient exists,
+    # 404 when it does not. It is `@require_auth` only — no clinic
+    # relationship needed — which is why a service key can use it, unlike
+    # `/blocks` (see #801).
+    url = f"{base}/api/v1/patients/{guid}/clinics"
     try:
         r = http_requests.get(
             url, headers=_ips_headers(), timeout=5,
