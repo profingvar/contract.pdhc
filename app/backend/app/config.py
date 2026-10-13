@@ -10,6 +10,34 @@ def getenv_required(name: str) -> str:
     return v
 
 
+def _session_cookie_secure(production: bool) -> bool:
+    """#816 — mark the session cookie Secure so it never travels in clear.
+
+    This cookie carries the SSO token and the access blob. nginx terminates
+    TLS and proxies plain HTTP to gunicorn, so Flask sees an http request and
+    cannot infer the flag; it has to be set deliberately.
+
+    The vhost's `return 301 https://` does not make it unnecessary: a browser
+    holding a non-Secure cookie attaches it to the cleartext request and only
+    THEN receives the redirect, so the token is already on the wire. HSTS is
+    what prevents that first request. contract.pdhc.se is one of only two
+    vhosts that already sends it (#816 Part B covers the other nine).
+
+    Off outside production, where the service is plain http://localhost and a
+    Secure cookie would simply never be stored.
+
+    Overridable, because the flag has one real cost: production reached
+    directly on 127.0.0.1:<port> through an ssh forward is plain HTTP, so a
+    logged-in page cannot be debugged that way while this is on. An EMPTY
+    value counts as unset rather than false — reading `FOO=` as false would
+    silently disable it in production.
+    """
+    raw = os.getenv("SESSION_COOKIE_SECURE", "").strip()
+    if raw:
+        return raw.lower() in ("1", "true", "yes")
+    return production
+
+
 class Config:
     ENV = os.getenv("FLASK_ENV", "production")
     JWT_SECRET_KEY = getenv_required("JWT_SECRET_KEY")
@@ -65,6 +93,18 @@ class Config:
             "AUTH_DISABLED=true requires FLASK_ENV=development. "
             f"Refusing to start with auth bypassed in FLASK_ENV={ENV!r}."
         )
+
+    # ---- #816: session cookie hardening ------------------------------
+    SESSION_COOKIE_SECURE = _session_cookie_secure(not AUTH_DISABLED)
+    # No script should read this cookie. Flask already defaults it True;
+    # stated so a future edit argues with a line, not an absence.
+    SESSION_COOKIE_HTTPONLY = True
+    # 'Lax', NOT 'Strict', and load-bearing: SSO login finishes with a
+    # top-level GET redirect from sso.pdhc.se back to SSO_CALLBACK_URL
+    # below. Lax sends the cookie on a top-level navigation; Strict
+    # withholds it and breaks login with no error anyone can read.
+    SESSION_COOKIE_SAMESITE = "Lax"
+
     SSO_BASE_URL = os.getenv("SSO_BASE_URL", "https://sso.pdhc.se")
     SSO_CLIENT_ID = os.getenv("SSO_CLIENT_ID", "")
     SSO_CLIENT_SECRET = os.getenv("SSO_CLIENT_SECRET", "")

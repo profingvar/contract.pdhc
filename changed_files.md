@@ -221,3 +221,4 @@ Tests: full contract.pdhc suite 94/94 green (was 70/70).
 /Users/martiningvar/T7_sidewinder/contract.pdhc/app/web/dist/index.html
 /Users/martiningvar/T7_sidewinder/contract.pdhc/app/docs/architecture.md
 /Users/martiningvar/T7_sidewinder/contract.pdhc/app/docs/operator-manual.md
+- 2026-10-13 app/backend/app/config.py — #816: SESSION_COOKIE_SECURE/HTTPONLY/SAMESITE
